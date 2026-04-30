@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -259,6 +260,7 @@ async def enhance_preview(
     grid_size: str = Form(...),
     palette_name: str = Form("MARD"),
     quality: int = Form(85),
+    current_grid_json: Optional[str] = Form(None),
     current_user: models.User = Depends(get_admin_user),
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -278,11 +280,32 @@ async def enhance_preview(
         try:
             enhanced_path, ai_enhancement = enhance_image_for_beads(img_path, workdir)
             grid_source_path = enhanced_path if ai_enhancement.get("used") else img_path
+            if ai_enhancement.get("used"):
+                try:
+                    result = _convert_image_to_grid(enhanced_path, grid_size, quality)
+                    result["ai_enhancement"] = ai_enhancement
+                    result["ai_grid"] = {
+                        "attempted": False,
+                        "used": False,
+                        "provider": "openai",
+                        "reason": "deterministic_converter_used",
+                    }
+                    return apply_color_system_to_result(result, selected_palette)
+                except Exception as conversion_exc:
+                    ai_enhancement["deterministic_conversion_error"] = str(conversion_exc)
+
+            grid_kwargs = {
+                "grid_size": grid_size,
+                "quality": quality,
+                "ai_metadata": ai_enhancement,
+            }
+            if isinstance(current_grid_json, str) and current_grid_json.strip():
+                grid_kwargs["current_grid_json"] = current_grid_json
+            if ai_enhancement.get("used") and os.path.abspath(grid_source_path) != os.path.abspath(img_path):
+                grid_kwargs["original_image_path"] = img_path
             ai_grid_result, ai_grid = generate_openai_bead_grid(
                 grid_source_path,
-                grid_size=grid_size,
-                quality=quality,
-                ai_metadata=ai_enhancement,
+                **grid_kwargs,
             )
             if ai_grid_result:
                 return apply_color_system_to_result(ai_grid_result, selected_palette)
@@ -291,10 +314,10 @@ async def enhance_preview(
                     status_code=422,
                     detail={"ai_enhancement": ai_enhancement, "ai_grid": ai_grid},
                 )
-            result = _convert_image_to_grid(enhanced_path, grid_size, quality)
-            result["ai_enhancement"] = ai_enhancement
-            result["ai_grid"] = ai_grid
-            return apply_color_system_to_result(result, selected_palette)
+            raise HTTPException(
+                status_code=422,
+                detail={"ai_enhancement": ai_enhancement, "ai_grid": ai_grid},
+            )
         except HTTPException:
             raise
         except Exception as exc:

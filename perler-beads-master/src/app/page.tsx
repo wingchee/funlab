@@ -120,6 +120,11 @@ type PixelCraftResult = {
   image?: { source_name?: string };
 };
 
+type PixelCraftEditorPayload = {
+  source_image_data_url?: string | null;
+  result?: PixelCraftResult;
+};
+
 export default function Home() {
   const [originalImageSrc, setOriginalImageSrc] = useState<string | null>(null);
   const [granularity, setGranularity] = useState<number>(50);
@@ -383,7 +388,7 @@ export default function Home() {
     const raw = localStorage.getItem('pixelcraft_editor_payload');
     if (!raw) return;
     try {
-      const payload = JSON.parse(raw);
+      const payload = JSON.parse(raw) as PixelCraftEditorPayload;
       if (payload?.result) {
         applyPixelCraftResult(payload.result);
       }
@@ -392,9 +397,8 @@ export default function Home() {
     }
   }, [applyPixelCraftResult]);
 
-  const handleSaveToPixelCraft = () => {
-    if (!mappedPixelData || !gridDimensions) return;
-
+  const buildCurrentPixelCraftResult = useCallback((): PixelCraftResult | null => {
+    if (!mappedPixelData || !gridDimensions) return null;
     const legendByColor: Record<string, PixelCraftLegendEntry> = { ...pixelCraftLegendByColor };
     const legendCounts: Record<string, number> = {};
     const cells: PixelCraftCell[] = [];
@@ -434,7 +438,7 @@ export default function Home() {
         count: legendCounts[entry.color_hex.toUpperCase()] || 0,
       }));
 
-    const result: PixelCraftResult = {
+    return {
       rows: gridDimensions.M,
       cols: gridDimensions.N,
       cells,
@@ -442,6 +446,11 @@ export default function Home() {
       artifacts: {},
       image: { source_name: 'edited-pattern' },
     };
+  }, [gridDimensions, mappedPixelData, pixelCraftLegendByColor]);
+
+  const handleSaveToPixelCraft = () => {
+    const result = buildCurrentPixelCraftResult();
+    if (!result) return;
 
     localStorage.setItem('pixelcraft_editor_result', JSON.stringify({
       source: 'pixelcraft-editor',

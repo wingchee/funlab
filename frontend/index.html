@@ -550,7 +550,23 @@ function AdminPage({ onPatternPublished }) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleFileSelect = (file) => {
+  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Unable to read image'));
+    reader.readAsDataURL(file);
+  });
+
+  const dataUrlToFile = (dataUrl, filename) => {
+    const [header, data] = dataUrl.split(',');
+    const mime = (header.match(/data:([^;]+)/) || [])[1] || 'image/png';
+    const binary = atob(data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new File([bytes], filename, { type: mime });
+  };
+
+  const handleFileSelect = async (file) => {
     if (!file) return;
     if (!file.type?.startsWith('image/')) {
       setError('Please choose a JPG, PNG, or WEBP image');
@@ -565,13 +581,19 @@ function AdminPage({ onPatternPublished }) {
     localStorage.removeItem('pixelcraft_admin_draft');
     localStorage.removeItem('pixelcraft_editor_payload');
     localStorage.removeItem('pixelcraft_editor_result');
-    setUploaded({ name: file.name, size: `${(file.size / 1024 / 1024).toFixed(1)} MB`, file });
-    setStep('configure');
-    setAiEnhancingSize(null);
-    aiEnhancingRef.current.clear();
-    setEditorStatus('');
-    setError('');
-    resetFileInput();
+    try {
+      const sourceImageDataUrl = await fileToDataUrl(file);
+      setUploaded({ name: file.name, size: `${(file.size / 1024 / 1024).toFixed(1)} MB`, file, sourceImageDataUrl });
+      setStep('configure');
+      setAiEnhancingSize(null);
+      aiEnhancingRef.current.clear();
+      setEditorStatus('');
+      setError('');
+    } catch (err) {
+      setError('Unable to read image');
+    } finally {
+      resetFileInput();
+    }
   };
 
   const handleDrop = (e) => {
@@ -696,7 +718,7 @@ function AdminPage({ onPatternPublished }) {
       }
 
       if (!restoredProcessingResult) return false;
-      setUploaded(draft.uploaded || null);
+      setUploaded(draft.uploaded ? { ...draft.uploaded, sourceImageDataUrl: draft.sourceImageDataUrl || null } : null);
       setSettings(draft.settings || { gridSize: '24x24', quality: 85 });
       setProcessingResult(restoredProcessingResult);
       setSelectedSize(restoredSelectedSize);
@@ -748,10 +770,12 @@ function AdminPage({ onPatternPublished }) {
       updated_at: Date.now(),
       selected_size: selectedSize,
       image: { source_name: uploaded?.name || activeResult.image?.source_name || 'pattern' },
+      source_image_data_url: uploaded?.sourceImageDataUrl || null,
       result: activeResult,
     };
     localStorage.setItem('pixelcraft_admin_draft', JSON.stringify({
       uploaded: uploaded ? { name: uploaded.name, size: uploaded.size } : null,
+      sourceImageDataUrl: uploaded?.sourceImageDataUrl || null,
       settings,
       processingResult,
       selectedSize,
@@ -782,6 +806,68 @@ function AdminPage({ onPatternPublished }) {
         },
       };
     });
+  };
+
+  const handleAiEnhancePreview = async () => {
+    if (!activeResult || !selectedSize || isGridImage || isActiveAiEnhancing) return;
+    const sourceFile = uploaded?.file || (uploaded?.sourceImageDataUrl ? dataUrlToFile(uploaded.sourceImageDataUrl, uploaded.name || 'source.png') : null);
+    if (!sourceFile) {
+      setError('Original image is unavailable. Upload the image again to use AI enhance.');
+      return;
+    }
+
+    setError('');
+    setEditorStatus('');
+    setAiEnhancingSize(selectedSize);
+    const form = new FormData();
+    form.append('file', sourceFile);
+    form.append('grid_size', selectedSize);
+    form.append('palette_name', 'MARD');
+    form.append('quality', settings.quality);
+    form.append('current_grid_json', JSON.stringify(activeResult));
+
+    try {
+      const res = await apiFetch('/admin/enhance-preview', { method: 'POST', body: form });
+      if (!res?.ok) {
+        const err = await res?.json();
+        const detail = err?.detail;
+        const detailMeta = typeof detail === 'object' && detail !== null ? detail : {};
+        const enhancementMeta = detailMeta.ai_enhancement || detailMeta;
+        const gridMeta = detailMeta.ai_grid;
+        markAiEnhancementForSize(selectedSize, {
+          attempted: true,
+          used: false,
+          provider: 'openai',
+          ...enhancementMeta,
+          reason: enhancementMeta.reason || (typeof detail === 'string' ? detail : 'AI enhancement failed'),
+          ai_grid: gridMeta,
+        });
+        setError(enhancementMeta.reason || (typeof detail === 'string' ? detail : 'AI enhancement failed'));
+        return;
+      }
+      const enhanced = await res.json();
+      setProcessingResult(prev => {
+        if (!prev?.variants?.[selectedSize]) return prev;
+        return {
+          ...prev,
+          variants: {
+            ...prev.variants,
+            [selectedSize]: enhanced,
+          },
+        };
+      });
+      setEditorStatus('AI enhanced preview applied.');
+    } catch (err) {
+      markAiEnhancementForSize(selectedSize, {
+        attempted: true,
+        used: false,
+        provider: 'openai',
+        reason: 'Connection error during AI enhancement',
+      });
+      setError('Connection error during AI enhancement');
+    } finally {
+      setAiEnhancingSize(current => current === selectedSize ? null : current);
+    }
   };
 
   useEffect(() => {
@@ -1117,6 +1203,13 @@ function AdminPage({ onPatternPublished }) {
 
               <div style={{display:'flex',gap:10}}>
                 <button onClick={()=>{setStep('upload');setUploaded(null);setProcessingResult(null);setAiEnhancingSize(null);resetFileInput();setEditorStatus('');localStorage.removeItem('pixelcraft_admin_draft');localStorage.removeItem('pixelcraft_editor_payload');localStorage.removeItem('pixelcraft_editor_result');}} style={{flex:1,background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Upload Another</button>
+                <button onClick={handleAiEnhancePreview} disabled={!activeResult || isActiveAiEnhancing || isGridImage || !selectedSize || !(uploaded?.file || uploaded?.sourceImageDataUrl)} style={{
+                  flex:1,background:(!activeResult||isActiveAiEnhancing||isGridImage||!selectedSize||!(uploaded?.file||uploaded?.sourceImageDataUrl))?'#e8e6e1':'#fff',
+                  color:(!activeResult||isActiveAiEnhancing||isGridImage||!selectedSize||!(uploaded?.file||uploaded?.sourceImageDataUrl))?'#aaa':T.accentRed,
+                  border:`1px solid ${(!activeResult||isActiveAiEnhancing||isGridImage||!selectedSize||!(uploaded?.file||uploaded?.sourceImageDataUrl))?'#e8e6e1':T.accentRed}`,
+                  borderRadius:8,padding:'11px 0',fontWeight:700,fontSize:13,
+                  cursor:(!activeResult||isActiveAiEnhancing||isGridImage||!selectedSize||!(uploaded?.file||uploaded?.sourceImageDataUrl))?'default':'pointer',fontFamily:'inherit',transition:'all 0.2s'
+                }}>{isActiveAiEnhancing ? 'Enhancing…' : 'AI Enhance'}</button>
                 <button onClick={handleEditGrid} disabled={!activeResult || isActiveAiEnhancing} style={{
                   flex:1,background:(!activeResult||isActiveAiEnhancing)?'#e8e6e1':'#fff',
                   color:(!activeResult||isActiveAiEnhancing)?'#aaa':T.accentRed,
