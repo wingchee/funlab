@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    volumes:
+      - pindou_data:/app/data       # SQLite database
+      - pindou_uploads:/app/uploads # Uploaded images
+    environment:
+      - DATABASE_URL=sqlite:////app/data/pindou.db
+      - SECRET_KEY=${SECRET_KEY:-pixelcraft-change-this-in-production}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_IMAGE_MODEL=${OPENAI_IMAGE_MODEL:-gpt-image-1.5}
+      - OPENAI_IMAGE_SIZE=${OPENAI_IMAGE_SIZE:-1024x1024}
+      - OPENAI_IMAGE_QUALITY=${OPENAI_IMAGE_QUALITY:-medium}
+      - OPENAI_IMAGE_MODERATION=${OPENAI_IMAGE_MODERATION:-low}
+      - OPENAI_GRID_MODEL=${OPENAI_GRID_MODEL:-gpt-4.1-mini}
+      - OPENAI_GRID_MAX_OUTPUT_TOKENS=${OPENAI_GRID_MAX_OUTPUT_TOKENS:-60000}
+      - OPENAI_REQUEST_TIMEOUT=${OPENAI_REQUEST_TIMEOUT:-45}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "${PORT:-80}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pindou_data:
+  pindou_uploads:

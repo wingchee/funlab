@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FunLab 拼豆 — Member Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="application/json" id="__tweaks">
+{
+  "accentRed": "#F47A8A",
+  "accentOrange": "#6BB5E8",
+  "bgColor": "#FEF4F5",
+  "cardRadius": 16,
+  "fontBody": "Space Grotesk"
+}
+</script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: #FEF4F5;
+  color: #1A1A18;
+  overflow-x: hidden;
+}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0cec9; border-radius: 3px; }
+
+/* Pixel grid background */
+.pixel-bg {
+  background-image:
+    linear-gradient(rgba(26,26,24,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,26,24,0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Animations */
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes scaleIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+@keyframes slideUp { from { transform:translateY(100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+.fade-in { animation: fadeIn 0.35s ease forwards; }
+.scale-in { animation: scaleIn 0.25s ease forwards; }
+
+/* Tweaks panel */
+#tweaks-panel {
+  position: fixed; bottom: 24px; right: 24px;
+  background: #1A1A18; color: #fff;
+  border-radius: 14px; padding: 20px 24px;
+  width: 280px; z-index: 9999;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  display: none;
+}
+#tweaks-panel.visible { display: block; animation: slideUp 0.2s ease; }
+#tweaks-panel h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #888; margin-bottom: 16px; }
+.tweak-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+.tweak-row label { font-size: 13px; color: #ccc; flex: 1; }
+.tweak-row input[type=color] { width: 36px; height: 28px; border: none; background: none; cursor: pointer; border-radius: 4px; }
+.tweak-row input[type=range] { flex: 1; accent-color: #E84545; }
+.tweak-row select { background: #2a2a28; color: #fff; border: 1px solid #444; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<div id="tweaks-panel">
+  <h4>Tweaks</h4>
+  <div class="tweak-row"><label>Accent Red</label><input type="color" id="tw-red" value="#F47A8A"/></div>
+  <div class="tweak-row"><label>Accent Orange</label><input type="color" id="tw-orange" value="#6BB5E8"/></div>
+  <div class="tweak-row"><label>Card Radius</label><input type="range" id="tw-radius" min="4" max="24" value="12"/><span id="tw-radius-val" style="font-size:11px;color:#888;width:28px;text-align:right">12px</span></div>
+  <div class="tweak-row"><label>Font</label>
+    <select id="tw-font">
+      <option value="Space Grotesk">Space Grotesk</option>
+      <option value="Inter">Inter</option>
+      <option value="DM Sans">DM Sans</option>
+    </select>
+  </div>
+</div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── TWEAKS ───────────────────────────────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentRed": "#f47a8a",
+  "accentOrange": "#6bb5e8",
+  "bgColor": "#FEF4F5",
+  "cardRadius": 8,
+  "fontBody": "Space Grotesk"
+}/*EDITMODE-END*/;
+
+function useTweaks() {
+  const [t, setT] = useState(TWEAK_DEFAULTS);
+  useEffect(() => {
+    const panel = document.getElementById('tweaks-panel');
+    const applyCSS = (vals) => {
+      document.body.style.fontFamily = `'${vals.fontBody}', sans-serif`;
+      document.documentElement.style.setProperty('--accent', vals.accentRed);
+      document.documentElement.style.setProperty('--orange', vals.accentOrange);
+      document.documentElement.style.setProperty('--bg', vals.bgColor);
+      document.documentElement.style.setProperty('--radius', vals.cardRadius + 'px');
+    };
+    applyCSS(t);
+
+    const onMsg = (e) => {
+      if (e.data?.type === '__activate_edit_mode') panel.classList.add('visible');
+      if (e.data?.type === '__deactivate_edit_mode') panel.classList.remove('visible');
+    };
+    window.addEventListener('message', onMsg);
+
+    const sync = () => {
+      const r = document.getElementById('tw-red')?.value || t.accentRed;
+      const o = document.getElementById('tw-orange')?.value || t.accentOrange;
+      const rad = parseInt(document.getElementById('tw-radius')?.value || t.cardRadius);
+      const f = document.getElementById('tw-font')?.value || t.fontBody;
+      document.getElementById('tw-radius-val').textContent = rad + 'px';
+      const next = { accentRed: r, accentOrange: o, bgColor: t.bgColor, cardRadius: rad, fontBody: f };
+      applyCSS(next);
+      setT(next);
+      window.parent.postMessage({ type: '__edit_mode_set_keys', edits: next }, '*');
+    };
+    ['tw-red','tw-orange','tw-radius','tw-font'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', sync);
+    });
+
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+  return t;
+}
+
+// ─── MOCK DATA ─────────────────────────────────────────────────────────────────
+const BEAD_PALETTE = [
+  { id:'B001', name:'Cherry Red',   hex:'#CC2936' },
+  { id:'B002', name:'Sky Blue',     hex:'#4A90D9' },
+  { id:'B003', name:'Lemon Yellow', hex:'#F5C518' },
+  { id:'B004', name:'Forest Green', hex:'#2E7D32' },
+  { id:'B005', name:'Pure White',   hex:'#F5F5F0' },
+  { id:'B006', name:'Jet Black',    hex:'#1C1C1E' },
+  { id:'B007', name:'Peach',        hex:'#FFAB76' },
+  { id:'B008', name:'Lavender',     hex:'#9B72CF' },
+  { id:'B009', name:'Coral',        hex:'#FF6B6B' },
+  { id:'B010', name:'Teal',         hex:'#26A69A' },
+];
+
+function generateGrid(w, h, palette) {
+  return Array.from({length: h}, (_, y) =>
+    Array.from({length: w}, (_, x) => {
+      const i = Math.floor((Math.sin(x*0.7 + y*0.5)*0.5+0.5) * palette.length);
+      return palette[i % palette.length].id;
+    })
+  );
+}
+
+const PATTERNS = [
+  { id:1, title:'Super Mushroom', tags:['Nintendo','Game','Character'], size:'Small', gridW:16, gridH:16, faves:234, palette:BEAD_PALETTE.slice(0,6), preview:'#CC2936' },
+  { id:2, title:'Pixel Cat',      tags:['Animal','Cute'],               size:'Medium',gridW:24, gridH:24, faves:189, palette:BEAD_PALETTE.slice(2,8), preview:'#F5C518' },
+  { id:3, title:'Sakura Branch',  tags:['Nature','Floral'],             size:'Large', gridW:32, gridH:32, faves:312, palette:BEAD_PALETTE.slice(4,9), preview:'#FFAB76' },
+  { id:4, title:'Pikachu',        tags:['Nintendo','Anime','Character'],size:'Medium',gridW:24, gridH:24, faves:501, palette:BEAD_PALETTE.slice(1,7), preview:'#F5C518' },
+  { id:5, title:'Rainbow Star',   tags:['Abstract','Star'],             size:'Small', gridW:16, gridH:16, faves:98,  palette:BEAD_PALETTE.slice(0,7), preview:'#9B72CF' },
+  { id:6, title:'Totoro',         tags:['Anime','Character'],           size:'Large', gridW:32, gridH:32, faves:445, palette:BEAD_PALETTE.slice(3,9), preview:'#2E7D32' },
+  { id:7, title:'Sunset Waves',   tags:['Abstract','Landscape'],        size:'Medium',gridW:24, gridH:24, faves:167, palette:BEAD_PALETTE.slice(0,5), preview:'#FF6B6B' },
+  { id:8, title:'Pixel Heart',    tags:['Love','Simple'],               size:'Small', gridW:12, gridH:12, faves:720, palette:BEAD_PALETTE.slice(0,4), preview:'#CC2936' },
+];
+
+// ─── PIXEL THUMBNAIL ───────────────────────────────────────────────────────────
+function PixelThumb({ color, size = 80 }) {
+  const ref = useRef();
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const cols = 8, rows = 8;
+    const cw = size/cols, ch = size/rows;
+    const hsl = color;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const t = Math.sin(x*1.2+y*0.8)*0.4+0.6;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.2 + t*0.75;
+        ctx.fillRect(x*cw, y*ch, cw-1, ch-1);
+      }
+    }
+  }, [color, size]);
+  return <canvas ref={ref} width={size} height={size} style={{imageRendering:'pixelated',borderRadius:4,display:'block'}}/>;
+}
+
+// ─── PATTERN CARD ─────────────────────────────────────────────────────────────
+function PatternCard({ pattern, onOpen, isFaved, onFave, tweaks, isLoggedIn }) {
+  const [hover, setHover] = useState(false);
+  const sizeColor = { Small:'#10B981', Medium:'#F5A623', Large:'#E84545' }[pattern.size];
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={() => onOpen(pattern)}
+      style={{
+        background: '#fff',
+        borderRadius: tweaks.cardRadius,
+        overflow: 'hidden',
+        cursor: 'pointer',
+        border: hover ? `2px solid ${tweaks.accentRed}` : '2px solid transparent',
+        transition: 'all 0.18s ease',
+        transform: hover ? 'translateY(-3px)' : 'none',
+        boxShadow: hover ? '0 8px 24px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.06)',
+      }}>
+      {/* Preview area */}
+      <div style={{
+        height: 160, background: `${pattern.preview}18`,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        position:'relative', overflow:'hidden'
+      }}>
+        <PixelGridPreview color={pattern.preview} w={pattern.gridW} h={pattern.gridH}/>
+        <div style={{position:'absolute',top:10,right:10}}>
+          <button
+            onClick={e => { e.stopPropagation(); if(!isLoggedIn){return;}onFave(pattern.id); }}
+            style={{
+              background: isFaved ? tweaks.accentRed : 'rgba(255,255,255,0.9)',
+              border:'none', borderRadius:'50%', width:32, height:32,
+              cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+              transition:'all 0.15s',
+              transform: isFaved ? 'scale(1.1)' : 'scale(1)',
+              boxShadow:'0 2px 8px rgba(0,0,0,0.15)'
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill={isFaved?'#fff':'#999'}>
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </button>
+        </div>
+        <div style={{position:'absolute',top:10,left:10}}>
+          <span style={{
+            background: sizeColor, color:'#fff',
+            fontSize:10, fontWeight:700, letterSpacing:'.06em',
+            padding:'3px 8px', borderRadius:20, fontFamily:'Space Mono,monospace'
+          }}>{pattern.size.toUpperCase()}</span>
+        </div>
+      </div>
+      {/* Info */}
+      <div style={{padding:'14px 16px 16px'}}>
+        <div style={{fontWeight:700, fontSize:15, marginBottom:6}}>{pattern.title}</div>
+        <div style={{display:'flex', gap:4, flexWrap:'wrap', marginBottom:10}}>
+          {pattern.tags.map(t => (
+            <span key={t} style={{
+              background:'#f2f1ee', fontSize:11, padding:'2px 8px',
+              borderRadius:20, color:'#666', fontWeight:500
+            }}>{t}</span>
+          ))}
+        </div>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+          <div style={{display:'flex', gap:3}}>
+            {pattern.palette.slice(0,5).map(c => (
+              <div key={c.id} style={{width:12,height:12,borderRadius:'50%',background:c.hex,border:'1px solid rgba(0,0,0,0.08)'}}/>
+            ))}
+          </div>
+          <span style={{fontSize:12, color:'#999', fontFamily:'Space Mono,monospace'}}>
+            ♥ {pattern.faves}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PixelGridPreview({ color, w, h }) {
+  const ref = useRef();
+  const size = 160;
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    const cw = size/Math.min(w,20), ch = size/Math.min(h,20);
+    const palette = [color, '#fff', `${color}88`, '#f0ede8', `${color}cc`];
+    for (let y = 0; y < Math.min(h,20); y++) {
+      for (let x = 0; x < Math.min(w,20); x++) {
+        const v = (Math.sin(x*1.1+y*0.9)*0.5+0.5);
+        ctx.fillStyle = v > 0.6 ? color : v > 0.35 ? `${color}88` : '#f0ede8';
+        ctx.fillRect(x*cw+0.5, y*ch+0.5, cw-1, ch-1);
+      }
+    }
+  }, [color, w, h]);
+  return <canvas ref={ref} width={size} height={size} style={{imageRendering:'pixelated',opacity:0.9}}/>;
+}
+
+// ─── NAVBAR ──────────────────────────────────────────────────────────────────
+function Navbar({ page, setPage, isLoggedIn, isAdmin, onLoginClick, onLogout, tweaks }) {
+  return (
+    <nav style={{
+      position:'sticky', top:0, zIndex:100,
+      background:'rgba(250,250,248,0.92)', backdropFilter:'blur(12px)',
+      borderBottom:'1px solid #e8e6e1',
+      display:'flex', alignItems:'center', gap:0,
+      padding:'0 32px', height:60,
+    }}>
+      {/* Logo */}
+      <div style={{display:'flex', alignItems:'center', gap:10, marginRight:40, cursor:'pointer'}} onClick={() => setPage('gallery')}>
+        <div style={{
+          width:32, height:32, borderRadius:6, overflow:'hidden',
+          flexShrink:0
+        }}>
+          <img src="funlab-logo.jpeg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab"/>
+          {[0,1,2,3].map(i=>(
+            <div key={i} style={{background: i%2===0?'#fff':tweaks.accentOrange,borderRadius:1}}/>
+          ))}
+        </div>
+        <span style={{fontWeight:800, fontSize:17, letterSpacing:'-0.02em'}}>
+          <span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF', fontSize:14, fontWeight:600}}>拼豆</span>
+        </span>
+      </div>
+
+      {/* Nav links */}
+      <div style={{display:'flex', gap:4, flex:1}}>
+        {[['gallery','Browse'], ['favorites','My Favorites']].map(([id, label]) => (
+          <button key={id} onClick={() => setPage(id)} style={{
+            background: page===id ? `${tweaks.accentRed}15` : 'transparent',
+            color: page===id ? tweaks.accentRed : '#555',
+            border: 'none', borderRadius: 8, padding:'6px 14px',
+            fontWeight: page===id ? 700 : 500, fontSize:14,
+            cursor:'pointer', fontFamily:'inherit',
+            transition:'all 0.15s'
+          }}>{label}</button>
+        ))}
+        {isAdmin && (
+          <button onClick={() => setPage('admin')} style={{
+            background: page==='admin' ? `${tweaks.accentRed}15` : 'transparent',
+            color: page==='admin' ? tweaks.accentRed : '#555',
+            border: 'none', borderRadius: 8, padding:'6px 14px',
+            fontWeight: page==='admin' ? 700 : 500, fontSize:14,
+            cursor:'pointer', fontFamily:'inherit',
+            transition:'all 0.15s'
+          }}>Admin</button>
+        )}
+      </div>
+
+      {/* Right side */}
+      {isLoggedIn ? (
+        <div style={{display:'flex', alignItems:'center', gap:12}}>
+          {isAdmin && (
+            <span style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',background:tweaks.accentOrange,color:'#fff',padding:'3px 8px',borderRadius:20}}>ADMIN</span>
+          )}
+          <div style={{
+            width:34,height:34, borderRadius:'50%',
+            background:`linear-gradient(135deg, ${tweaks.accentRed}, ${tweaks.accentOrange})`,
+            display:'flex',alignItems:'center',justifyContent:'center',
+            color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'
+          }} onClick={onLogout} title="Click to logout">Y</div>
+        </div>
+      ) : (
+        <button onClick={onLoginClick} style={{
+          background:tweaks.accentRed, color:'#fff', border:'none',
+          borderRadius:8, padding:'8px 20px', fontWeight:700, fontSize:13,
+          cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s'
+        }}>Sign In</button>
+      )}
+    </nav>
+  );
+}
+
+// ─── GALLERY PAGE ─────────────────────────────────────────────────────────────
+function GalleryPage({ patterns, favIds, onFave, onOpen, tweaks, isLoggedIn }) {
+  const [search, setSearch] = useState('');
+  const [sizeFilter, setSizeFilter] = useState('All');
+
+  const filtered = patterns.filter(p => {
+    const matchSearch = !search || p.title.toLowerCase().includes(search.toLowerCase()) ||
+      p.tags.some(t => t.toLowerCase().includes(search.toLowerCase()));
+    const matchSize = sizeFilter === 'All' || p.size === sizeFilter;
+    return matchSearch && matchSize;
+  });
+
+  return (
+    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)', padding:'40px 40px'}}>
+      {/* Hero bar */}
+      <div style={{marginBottom:32}}>
+        <h1 style={{fontSize:36, fontWeight:800, letterSpacing:'-0.03em', marginBottom:8}}>
+          Discover <span style={{color:tweaks.accentRed}}>Bead Patterns</span>
+        </h1>
+        <p style={{color:'#888', fontSize:15}}>Convert your favorite images into beautiful pixel bead art</p>
+      </div>
+
+      {/* Search + filters */}
+      <div style={{display:'flex', gap:12, marginBottom:32, flexWrap:'wrap', alignItems:'center'}}>
+        <div style={{
+          display:'flex', alignItems:'center', gap:10,
+          background:'#fff', border:'2px solid #e8e6e1', borderRadius:12,
+          padding:'10px 16px', flex:1, maxWidth:400,
+          transition:'border-color 0.15s'
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.5">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Search patterns… e.g. Mario, Flower"
+            style={{border:'none',outline:'none',fontSize:14,background:'transparent',width:'100%',fontFamily:'inherit',color:'#1A1A18'}}
+          />
+          {search && <button onClick={()=>setSearch('')} style={{background:'none',border:'none',cursor:'pointer',color:'#aaa',fontSize:16,lineHeight:1}}>×</button>}
+        </div>
+        <div style={{display:'flex', gap:6}}>
+          {['All','Small','Medium','Large'].map(s => (
+            <button key={s} onClick={()=>setSizeFilter(s)} style={{
+              background: sizeFilter===s ? tweaks.accentRed : '#fff',
+              color: sizeFilter===s ? '#fff' : '#666',
+              border: `2px solid ${sizeFilter===s ? tweaks.accentRed : '#e8e6e1'}`,
+              borderRadius:8, padding:'8px 16px', fontWeight:600,
+              fontSize:13, cursor:'pointer', fontFamily:'inherit',
+              transition:'all 0.15s'
+            }}>{s}</button>
+          ))}
+        </div>
+        <span style={{fontSize:13,color:'#999',marginLeft:'auto'}}>
+          <span style={{fontFamily:'Space Mono,monospace',fontWeight:700,color:'#1A1A18'}}>{filtered.length}</span> patterns
+        </span>
+      </div>
+
+      {/* Grid */}
+      <div style={{
+        display:'grid',
+        gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',
+        gap:20
+      }}>
+        {filtered.map(p => (
+          <div key={p.id} className="fade-in">
+            <PatternCard
+              pattern={p}
+              onOpen={onOpen}
+              isFaved={favIds.has(p.id)}
+              onFave={onFave}
+              tweaks={tweaks}
+              isLoggedIn={isLoggedIn}
+            />
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <div style={{gridColumn:'1/-1', textAlign:'center', padding:'80px 0', color:'#bbb'}}>
+            <div style={{fontSize:48, marginBottom:12}}>🔍</div>
+            <div style={{fontSize:16, fontWeight:600}}>No patterns found</div>
+            <div style={{fontSize:13, marginTop:4}}>Try a different search or filter</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── BEAD MAP VIEWER ──────────────────────────────────────────────────────────
+function BeadMapViewer({ pattern, onClose, tweaks, isLoggedIn }) {
+  const [crossed, setCrossed] = useState(new Set());
+  const [zoom, setZoom] = useState(1);
+  const [highlight, setHighlight] = useState(null);
+  const [showLegend, setShowLegend] = useState(true);
+  const grid = useRef(generateGrid(pattern.gridW, pattern.gridH, pattern.palette)).current;
+  const cellSize = Math.min(Math.floor(460 / pattern.gridW), 24);
+
+  const toggle = (key) => {
+    if (!isLoggedIn) return;
+    setCrossed(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const usedColors = {};
+  grid.flat().forEach(id => { usedColors[id] = (usedColors[id]||0)+1; });
+  const totalBeads = pattern.gridW * pattern.gridH;
+  const doneBeads = crossed.size;
+
+  return (
+    <div style={{
+      position:'fixed',inset:0, background:'rgba(26,26,24,0.7)', backdropFilter:'blur(6px)',
+      zIndex:200, display:'flex', alignItems:'center', justifyContent:'center',
+      padding:20
+    }} onClick={onClose}>
+      <div className="scale-in" onClick={e=>e.stopPropagation()} style={{
+        background:'#fff', borderRadius:20, width:'min(920px,95vw)',
+        maxHeight:'90vh', overflow:'hidden', display:'flex', flexDirection:'column',
+        boxShadow:'0 24px 80px rgba(0,0,0,0.25)'
+      }}>
+        {/* Header */}
+        <div style={{
+          padding:'18px 24px', borderBottom:'1px solid #f0ede8',
+          display:'flex', alignItems:'center', gap:16
+        }}>
+          <div style={{flex:1}}>
+            <h2 style={{fontSize:20,fontWeight:800,letterSpacing:'-0.02em'}}>{pattern.title}</h2>
+            <div style={{fontSize:12,color:'#999',marginTop:2,fontFamily:'Space Mono,monospace'}}>
+              {pattern.gridW}×{pattern.gridH} beads · {Object.keys(usedColors).length} colors
+              {isLoggedIn && ` · ${doneBeads}/${totalBeads} placed`}
+            </div>
+          </div>
+          {/* Progress */}
+          {isLoggedIn && (
+            <div style={{textAlign:'right'}}>
+              <div style={{fontSize:11,color:'#999',marginBottom:4,letterSpacing:'.06em',textTransform:'uppercase'}}>Progress</div>
+              <div style={{
+                width:120,height:6,background:'#f0ede8',borderRadius:3,overflow:'hidden'
+              }}>
+                <div style={{
+                  width:`${(doneBeads/totalBeads)*100}%`,height:'100%',
+                  background:`linear-gradient(90deg, ${tweaks.accentRed}, ${tweaks.accentOrange})`,
+                  transition:'width 0.3s'
+                }}/>
+              </div>
+              <div style={{fontSize:11,color:tweaks.accentRed,marginTop:3,fontWeight:700}}>
+                {Math.round((doneBeads/totalBeads)*100)}%
+              </div>
+            </div>
+          )}
+          {/* Zoom */}
+          <div style={{display:'flex',gap:4}}>
+            {[0.75,1,1.5,2].map(z=>(
+              <button key={z} onClick={()=>setZoom(z)} style={{
+                background: zoom===z ? tweaks.accentRed : '#f2f1ee',
+                color: zoom===z ? '#fff' : '#555',
+                border:'none',borderRadius:6,padding:'5px 9px',
+                fontSize:11,cursor:'pointer',fontFamily:'Space Mono,monospace',fontWeight:700
+              }}>{z}×</button>
+            ))}
+          </div>
+          <button onClick={onClose} style={{
+            background:'#f2f1ee',border:'none',borderRadius:8,width:34,height:34,
+            cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#555'
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{display:'flex', flex:1, overflow:'hidden', minHeight:0}}>
+          {/* Grid */}
+          <div style={{flex:1, overflow:'auto', padding:24}}>
+            {!isLoggedIn && (
+              <div style={{
+                background:`${tweaks.accentOrange}15`, border:`1px solid ${tweaks.accentOrange}40`,
+                borderRadius:10, padding:'10px 16px', marginBottom:16, fontSize:13,
+                color:'#8B6914', display:'flex', alignItems:'center', gap:8
+              }}>
+                <span>🔒</span>
+                <span>Sign in to track your progress and cross off placed beads</span>
+              </div>
+            )}
+            <div style={{
+              display:'inline-block',
+              border:'1px solid #e8e6e1',
+              borderRadius:8, overflow:'hidden',
+              transform:`scale(${zoom})`, transformOrigin:'top left',
+              transition:'transform 0.2s'
+            }}>
+              {grid.map((row, y) => (
+                <div key={y} style={{display:'flex'}}>
+                  {row.map((beadId, x) => {
+                    const bead = pattern.palette.find(b=>b.id===beadId) || BEAD_PALETTE[0];
+                    const key = `${x},${y}`;
+                    const done = crossed.has(key);
+                    const isHighlighted = highlight === beadId;
+                    return (
+                      <div key={x}
+                        onClick={() => toggle(key)}
+                        onMouseEnter={() => setHighlight(beadId)}
+                        onMouseLeave={() => setHighlight(null)}
+                        style={{
+                          width: cellSize, height: cellSize,
+                          background: done ? '#f0ede8' : (isHighlighted ? bead.hex : bead.hex),
+                          border: '0.5px solid rgba(0,0,0,0.06)',
+                          cursor: isLoggedIn ? 'pointer' : 'default',
+                          opacity: done ? 0.25 : isHighlighted ? 1 : 0.88,
+                          position:'relative', flexShrink:0,
+                          transition:'opacity 0.1s',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                        }}>
+                        {done && (
+                          <svg width={cellSize*0.6} height={cellSize*0.6} viewBox="0 0 10 10">
+                            <path d="M1.5 5 L4 7.5 L8.5 2.5" stroke="#888" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+                          </svg>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div style={{
+            width:200, borderLeft:'1px solid #f0ede8', padding:'20px 16px',
+            overflow:'auto', flexShrink:0
+          }}>
+            <div style={{
+              fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',
+              color:'#aaa',fontWeight:700,marginBottom:12
+            }}>Color Legend</div>
+            {Object.entries(usedColors).map(([id, count]) => {
+              const bead = pattern.palette.find(b=>b.id===id);
+              if (!bead) return null;
+              const done = [...crossed].filter(k => {
+                const [cx, cy] = k.split(',').map(Number);
+                return grid[cy]?.[cx] === id;
+              }).length;
+              return (
+                <div key={id}
+                  onMouseEnter={()=>setHighlight(id)}
+                  onMouseLeave={()=>setHighlight(null)}
+                  style={{
+                    display:'flex',alignItems:'center',gap:8,
+                    padding:'6px 8px',borderRadius:8,marginBottom:4,cursor:'pointer',
+                    background: highlight===id ? `${bead.hex}20` : 'transparent',
+                    transition:'background 0.15s'
+                  }}>
+                  <div style={{width:18,height:18,borderRadius:4,background:bead.hex,flexShrink:0,border:'1px solid rgba(0,0,0,0.1)'}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{bead.name}</div>
+                    <div style={{fontSize:10,color:'#aaa',fontFamily:'Space Mono,monospace'}}>{count} beads</div>
+                  </div>
+                  {isLoggedIn && done > 0 && (
+                    <div style={{fontSize:10,color:tweaks.accentRed,fontWeight:700,fontFamily:'Space Mono,monospace'}}>{done}</div>
+                  )}
+                </div>
+              );
+            })}
+
+            <button style={{
+              width:'100%', marginTop:16,
+              background:`linear-gradient(135deg, ${tweaks.accentRed}, ${tweaks.accentOrange})`,
+              color:'#fff', border:'none', borderRadius:8, padding:'10px 0',
+              fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit'
+            }}>
+              ↓ Download PDF
+            </button>
+            {isLoggedIn && crossed.size > 0 && (
+              <button onClick={()=>setCrossed(new Set())} style={{
+                width:'100%', marginTop:8,
+                background:'transparent', color:'#bbb', border:'1px solid #e8e6e1',
+                borderRadius:8, padding:'8px 0', fontWeight:600, fontSize:12,
+                cursor:'pointer', fontFamily:'inherit'
+              }}>Reset Progress</button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FAVORITES PAGE ───────────────────────────────────────────────────────────
+function FavoritesPage({ patterns, favIds, onFave, onOpen, tweaks, isLoggedIn, onLoginClick }) {
+  const faved = patterns.filter(p => favIds.has(p.id));
+
+  if (!isLoggedIn) return (
+    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)', display:'flex', alignItems:'center', justifyContent:'center'}}>
+      <div style={{textAlign:'center', maxWidth:360, padding:40}}>
+        <div style={{
+          width:80,height:80,borderRadius:20,
+          background:`linear-gradient(135deg, ${tweaks.accentRed}, ${tweaks.accentOrange})`,
+          display:'flex',alignItems:'center',justifyContent:'center',
+          margin:'0 auto 24px', fontSize:36
+        }}>♥</div>
+        <h2 style={{fontSize:24,fontWeight:800,marginBottom:8}}>Your Favorites</h2>
+        <p style={{color:'#888',fontSize:14,lineHeight:1.6,marginBottom:24}}>
+          Sign in to save patterns to your favorites and access them anytime.
+        </p>
+        <button onClick={onLoginClick} style={{
+          background:tweaks.accentRed,color:'#fff',border:'none',borderRadius:10,
+          padding:'12px 32px',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'inherit'
+        }}>Sign In to Continue</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)', padding:'40px 40px'}}>
+      <div style={{marginBottom:32}}>
+        <h1 style={{fontSize:36, fontWeight:800, letterSpacing:'-0.03em', marginBottom:8}}>
+          My <span style={{color:tweaks.accentRed}}>Favorites</span>
+        </h1>
+        <p style={{color:'#888',fontSize:15}}>
+          {faved.length} saved pattern{faved.length !== 1 ? 's' : ''}
+        </p>
+      </div>
+      {faved.length === 0 ? (
+        <div style={{textAlign:'center',padding:'80px 0',color:'#bbb'}}>
+          <div style={{fontSize:48,marginBottom:12}}>♡</div>
+          <div style={{fontSize:16,fontWeight:600}}>No favorites yet</div>
+          <div style={{fontSize:13,marginTop:4}}>Heart a pattern in the gallery to save it here</div>
+        </div>
+      ) : (
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
+          {faved.map(p => (
+            <div key={p.id} className="fade-in">
+              <PatternCard pattern={p} onOpen={onOpen} isFaved={true} onFave={onFave} tweaks={tweaks} isLoggedIn={isLoggedIn}/>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ADMIN PAGE ───────────────────────────────────────────────────────────────
+function AdminPage({ tweaks }) {
+  const [dragging, setDragging] = useState(false);
+  const [uploaded, setUploaded] = useState(null);
+  const [step, setStep] = useState('upload'); // upload | configure | preview
+  const [settings, setSettings] = useState({ gridSize: '24x24', palette: 'Hama', quality: 85 });
+  const [processing, setProcessing] = useState(false);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    setUploaded({ name: 'pixel_art_source.png', size:'2.4 MB' });
+    setStep('configure');
+  };
+
+  const handleProcess = () => {
+    setProcessing(true);
+    setTimeout(() => { setProcessing(false); setStep('preview'); }, 2000);
+  };
+
+  return (
+    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)', padding:'40px 40px'}}>
+      <div style={{marginBottom:32}}>
+        <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>
+          Admin <span style={{color:tweaks.accentRed}}>Dashboard</span>
+        </h1>
+        <p style={{color:'#888',fontSize:15}}>Upload images and configure bead pattern conversion</p>
+      </div>
+
+      {/* Steps indicator */}
+      <div style={{display:'flex',gap:0,marginBottom:32,maxWidth:480}}>
+        {[['upload','01 Upload'],['configure','02 Configure'],['preview','03 Preview']].map(([id,label],i,arr) => (
+          <React.Fragment key={id}>
+            <div style={{
+              flex:1, padding:'8px 0', textAlign:'center',
+              background: step===id ? tweaks.accentRed : (
+                ['upload','configure','preview'].indexOf(step) > i ? `${tweaks.accentRed}20` : '#f2f1ee'
+              ),
+              color: step===id ? '#fff' : (
+                ['upload','configure','preview'].indexOf(step) > i ? tweaks.accentRed : '#aaa'
+              ),
+              fontSize:12, fontWeight:700, letterSpacing:'.05em',
+              borderRadius: i===0?'8px 0 0 8px' : i===arr.length-1 ? '0 8px 8px 0' : 0,
+              transition:'all 0.2s'
+            }}>{label}</div>
+            {i < arr.length-1 && <div style={{width:1,background:'#e8e6e1'}}/>}
+          </React.Fragment>
+        ))}
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 380px',gap:24,maxWidth:960}}>
+        <div>
+          {/* Upload zone */}
+          {step === 'upload' && (
+            <div
+              onDragOver={e=>{e.preventDefault();setDragging(true)}}
+              onDragLeave={()=>setDragging(false)}
+              onDrop={handleDrop}
+              style={{
+                border:`2px dashed ${dragging ? tweaks.accentRed : '#d0cec9'}`,
+                borderRadius:16, padding:'60px 40px', textAlign:'center',
+                background: dragging ? `${tweaks.accentRed}08` : '#fff',
+                transition:'all 0.2s', cursor:'pointer'
+              }}>
+              <div style={{
+                width:72,height:72,borderRadius:16,
+                background:`${tweaks.accentRed}12`,
+                display:'flex',alignItems:'center',justifyContent:'center',
+                margin:'0 auto 20px'
+              }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={tweaks.accentRed} strokeWidth="1.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+              </div>
+              <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>Drop image here</div>
+              <div style={{color:'#999',fontSize:13,marginBottom:20}}>or click to browse · JPG, PNG up to 10MB</div>
+              <button
+                onClick={()=>{ setUploaded({name:'sample_image.png',size:'1.8 MB'}); setStep('configure'); }}
+                style={{
+                  background:tweaks.accentRed,color:'#fff',border:'none',borderRadius:8,
+                  padding:'10px 28px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'
+                }}>Choose File</button>
+            </div>
+          )}
+
+          {/* Configure */}
+          {step === 'configure' && uploaded && (
+            <div style={{background:'#fff',borderRadius:16,padding:28,border:'1px solid #f0ede8'}}>
+              <div style={{display:'flex',alignItems:'center',gap:14,padding:'12px 16px',
+                background:'#f8f7f4',borderRadius:10,marginBottom:24}}>
+                <div style={{width:40,height:40,borderRadius:8,background:`${tweaks.accentRed}15`,
+                  display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill={tweaks.accentRed} opacity=".7">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  </svg>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:14}}>{uploaded.name}</div>
+                  <div style={{fontSize:12,color:'#999'}}>{uploaded.size}</div>
+                </div>
+                <button onClick={()=>{setUploaded(null);setStep('upload');}} style={{
+                  background:'none',border:'none',color:'#bbb',cursor:'pointer',fontSize:18
+                }}>×</button>
+              </div>
+
+              {[
+                {label:'Grid Size', key:'gridSize', opts:['12x12','16x16','24x24','32x32','48x48']},
+                {label:'Bead Palette', key:'palette', opts:['Hama','Perler','Artkal S','Artkal C']},
+              ].map(({label,key,opts}) => (
+                <div key={key} style={{marginBottom:20}}>
+                  <label style={{display:'block',fontSize:13,fontWeight:600,marginBottom:8,color:'#555'}}>{label}</label>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    {opts.map(o=>(
+                      <button key={o} onClick={()=>setSettings(s=>({...s,[key]:o}))} style={{
+                        background: settings[key]===o ? tweaks.accentRed : '#f2f1ee',
+                        color: settings[key]===o ? '#fff' : '#555',
+                        border:'none',borderRadius:8,padding:'7px 14px',
+                        fontSize:13,cursor:'pointer',fontFamily:'Space Mono,monospace',fontWeight:600,
+                        transition:'all 0.15s'
+                      }}>{o}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div style={{marginBottom:24}}>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:13,fontWeight:600,marginBottom:8,color:'#555'}}>
+                  <label>Color Accuracy</label>
+                  <span style={{fontFamily:'Space Mono,monospace',color:tweaks.accentRed}}>{settings.quality}%</span>
+                </div>
+                <input type="range" min="50" max="100" value={settings.quality}
+                  onChange={e=>setSettings(s=>({...s,quality:parseInt(e.target.value)}))}
+                  style={{width:'100%',accentColor:tweaks.accentRed}}/>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'#bbb',marginTop:4}}>
+                  <span>Fast</span><span>Accurate</span>
+                </div>
+              </div>
+
+              <button onClick={handleProcess} disabled={processing} style={{
+                width:'100%',
+                background: processing ? '#e8e6e1' : `linear-gradient(135deg, ${tweaks.accentRed}, ${tweaks.accentOrange})`,
+                color: processing ? '#aaa' : '#fff',
+                border:'none',borderRadius:10,padding:'13px 0',
+                fontWeight:700,fontSize:14,cursor:processing?'default':'pointer',fontFamily:'inherit',
+                transition:'all 0.2s'
+              }}>
+                {processing ? (
+                  <span style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
+                    <span style={{display:'inline-block',width:14,height:14,border:`2px solid #aaa`,borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.6s linear infinite'}}/>
+                    Processing…
+                  </span>
+                ) : 'Convert to Bead Map ✦'}
+              </button>
+            </div>
+          )}
+
+          {/* Preview */}
+          {step === 'preview' && (
+            <div className="fade-in" style={{background:'#fff',borderRadius:16,padding:28,border:'1px solid #f0ede8'}}>
+              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+                <div style={{
+                  width:36,height:36,borderRadius:8,
+                  background:`${tweaks.accentRed}15`,display:'flex',alignItems:'center',justifyContent:'center'
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={tweaks.accentRed} strokeWidth="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:15}}>Conversion Complete!</div>
+                  <div style={{fontSize:12,color:'#999'}}>
+                    {settings.gridSize} grid · {settings.palette} palette
+                  </div>
+                </div>
+              </div>
+
+              {/* Mini preview grid */}
+              <div style={{
+                background:'#f8f7f4',borderRadius:10,padding:16,
+                marginBottom:20,display:'flex',justifyContent:'center'
+              }}>
+                <PixelGridPreview color={tweaks.accentRed} w={parseInt(settings.gridSize)} h={parseInt(settings.gridSize.split('x')[1])}/>
+              </div>
+
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                <div style={{background:`${tweaks.accentRed}08`,borderRadius:8,padding:'12px 14px'}}>
+                  <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:4}}>Grid</div>
+                  <div style={{fontWeight:700,fontFamily:'Space Mono,monospace'}}>{settings.gridSize}</div>
+                </div>
+                <div style={{background:`${tweaks.accentOrange}08`,borderRadius:8,padding:'12px 14px'}}>
+                  <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:4}}>Colors</div>
+                  <div style={{fontWeight:700,fontFamily:'Space Mono,monospace'}}>{Math.floor(settings.quality/12)}</div>
+                </div>
+              </div>
+
+              <div style={{display:'flex',gap:10,marginTop:16}}>
+                <button onClick={()=>{setStep('upload');setUploaded(null);}} style={{
+                  flex:1,background:'#f2f1ee',color:'#555',border:'none',
+                  borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,
+                  cursor:'pointer',fontFamily:'inherit'
+                }}>Upload Another</button>
+                <button style={{
+                  flex:2,
+                  background:`linear-gradient(135deg, ${tweaks.accentRed}, ${tweaks.accentOrange})`,
+                  color:'#fff',border:'none',borderRadius:8,padding:'11px 0',
+                  fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'
+                }}>Publish to Library ✦</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right panel - stats */}
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div style={{background:'#fff',borderRadius:16,padding:24,border:'1px solid #f0ede8'}}>
+            <div style={{fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'#aaa',marginBottom:16}}>Library Stats</div>
+            {[
+              {label:'Total Patterns', value:'8', icon:'▦'},
+              {label:'Total Favorites', value:'2,666', icon:'♥'},
+              {label:'Avg. Rating', value:'4.8/5', icon:'★'},
+            ].map(s=>(
+              <div key={s.label} style={{display:'flex',alignItems:'center',gap:14,marginBottom:14}}>
+                <div style={{
+                  width:38,height:38,borderRadius:8,
+                  background:`${tweaks.accentRed}10`,display:'flex',alignItems:'center',justifyContent:'center',
+                  fontSize:16,color:tweaks.accentRed
+                }}>{s.icon}</div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:20,fontFamily:'Space Mono,monospace',lineHeight:1}}>{s.value}</div>
+                  <div style={{fontSize:12,color:'#999',marginTop:2}}>{s.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{background:'#fff',borderRadius:16,padding:24,border:'1px solid #f0ede8'}}>
+            <div style={{fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'#aaa',marginBottom:16}}>Conversion Tips</div>
+            {[
+              'Use images with clear outlines for best results',
+              'Smaller grids use fewer bead colors',
+              'High contrast images convert most accurately',
+            ].map((tip,i)=>(
+              <div key={i} style={{display:'flex',gap:10,marginBottom:12,alignItems:'flex-start'}}>
+                <div style={{
+                  width:20,height:20,borderRadius:4,background:tweaks.accentOrange,
+                  flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
+                  color:'#fff',fontSize:10,fontWeight:700,marginTop:1
+                }}>{i+1}</div>
+                <div style={{fontSize:13,color:'#666',lineHeight:1.5}}>{tip}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LOGIN MODAL ──────────────────────────────────────────────────────────────
+function LoginModal({ onClose, onLogin, tweaks }) {
+  const [tab, setTab] = useState('login');
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      onLogin(email.includes('admin'));
+      onClose();
+    }, 900);
+  };
+
+  return (
+    <div style={{
+      position:'fixed',inset:0,background:'rgba(26,26,24,0.6)',backdropFilter:'blur(6px)',
+      zIndex:300,display:'flex',alignItems:'center',justifyContent:'center',
+    }} onClick={onClose}>
+      <div className="scale-in" onClick={e=>e.stopPropagation()} style={{
+        background:'#fff',borderRadius:20,width:380,padding:36,
+        boxShadow:'0 24px 80px rgba(0,0,0,0.2)'
+      }}>
+        {/* Logo */}
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:28,justifyContent:'center'}}>
+          <div style={{
+            width:40,height:40,borderRadius:8, overflow:'hidden', flexShrink:0
+          }}>
+            <img src="funlab-logo.jpeg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab"/>
+          </div>
+          <span style={{fontWeight:800,fontSize:18}}><span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>拼豆</span></span>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:'flex',background:'#f2f1ee',borderRadius:10,padding:4,marginBottom:24}}>
+          {['login','signup'].map(t=>(
+            <button key={t} onClick={()=>setTab(t)} style={{
+              flex:1,padding:'8px 0',border:'none',borderRadius:8,cursor:'pointer',fontFamily:'inherit',
+              fontWeight:700,fontSize:13,transition:'all 0.15s',
+              background: tab===t ? '#fff' : 'transparent',
+              color: tab===t ? '#1A1A18' : '#888',
+              boxShadow: tab===t ? '0 1px 4px rgba(0,0,0,0.1)' : 'none'
+            }}>{t === 'login' ? 'Sign In' : 'Create Account'}</button>
+          ))}
+        </div>
+
+        {/* Fields */}
+        {['Email','Password'].map(f=>(
+          <div key={f} style={{marginBottom:14}}>
+            <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>{f}</label>
+            <input
+              type={f==='Password'?'password':'email'}
+              value={f==='Email'?email:pass}
+              onChange={e=>f==='Email'?setEmail(e.target.value):setPass(e.target.value)}
+              placeholder={f==='Email'?'you@example.com':'••••••••'}
+              style={{
+                width:'100%',border:'2px solid #e8e6e1',borderRadius:8,padding:'10px 14px',
+                fontSize:14,fontFamily:'inherit',outline:'none',
+                transition:'border-color 0.15s', background:'#fafaf8'
+              }}
+              onFocus={e=>e.target.style.borderColor=tweaks.accentRed}
+              onBlur={e=>e.target.style.borderColor='#e8e6e1'}
+            />
+          </div>
+        ))}
+
+        <button onClick={submit} disabled={loading} style={{
+          width:'100%',marginTop:8,
+          background:loading ? '#e8e6e1' : `linear-gradient(135deg, ${tweaks.accentRed}, ${tweaks.accentOrange})`,
+          color: loading ? '#aaa' : '#fff',
+          border:'none',borderRadius:10,padding:'13px 0',
+          fontWeight:700,fontSize:14,cursor:loading?'default':'pointer',fontFamily:'inherit',
+          transition:'all 0.2s'
+        }}>
+          {loading ? 'Signing in…' : tab==='login' ? 'Sign In →' : 'Create Account →'}
+        </button>
+
+        <div style={{textAlign:'center',marginTop:16,fontSize:12,color:'#bbb'}}>
+          Tip: use <span style={{fontFamily:'Space Mono,monospace',color:'#888'}}>admin@…</span> email for admin role
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+function App() {
+  const tweaks = useTweaks();
+  const [page, setPage] = useState(() => localStorage.getItem('pc_page') || 'gallery');
+  const [favIds, setFavIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('pc_favs') || '[]')); }
+    catch { return new Set(); }
+  });
+  const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem('pc_loggedin') === '1');
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('pc_admin') === '1');
+  const [showLogin, setShowLogin] = useState(false);
+  const [openPattern, setOpenPattern] = useState(null);
+
+  useEffect(() => { localStorage.setItem('pc_page', page); }, [page]);
+  useEffect(() => { localStorage.setItem('pc_favs', JSON.stringify([...favIds])); }, [favIds]);
+  useEffect(() => { localStorage.setItem('pc_loggedin', isLoggedIn ? '1' : '0'); }, [isLoggedIn]);
+  useEffect(() => { localStorage.setItem('pc_admin', isAdmin ? '1' : '0'); }, [isAdmin]);
+
+  const onFave = (id) => {
+    if (!isLoggedIn) { setShowLogin(true); return; }
+    setFavIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const onLogin = (adminFlag) => {
+    setIsLoggedIn(true);
+    setIsAdmin(adminFlag);
+  };
+
+  const onLogout = () => {
+    setIsLoggedIn(false);
+    setIsAdmin(false);
+    localStorage.removeItem('pc_loggedin');
+    localStorage.removeItem('pc_admin');
+  };
+
+  return (
+    <div style={{minHeight:'100vh', background: tweaks.bgColor}}>
+      <Navbar
+        page={page} setPage={setPage}
+        isLoggedIn={isLoggedIn} isAdmin={isAdmin}
+        onLoginClick={() => setShowLogin(true)}
+        onLogout={onLogout}
+        tweaks={tweaks}
+      />
+
+      {page === 'gallery' && (
+        <GalleryPage
+          patterns={PATTERNS} favIds={favIds} onFave={onFave}
+          onOpen={setOpenPattern} tweaks={tweaks} isLoggedIn={isLoggedIn}
+        />
+      )}
+      {page === 'favorites' && (
+        <FavoritesPage
+          patterns={PATTERNS} favIds={favIds} onFave={onFave}
+          onOpen={setOpenPattern} tweaks={tweaks}
+          isLoggedIn={isLoggedIn} onLoginClick={() => setShowLogin(true)}
+        />
+      )}
+      {page === 'admin' && isAdmin && <AdminPage tweaks={tweaks}/>}
+
+      {openPattern && (
+        <BeadMapViewer
+          pattern={openPattern} onClose={() => setOpenPattern(null)}
+          tweaks={tweaks} isLoggedIn={isLoggedIn}
+        />
+      )}
+      {showLogin && (
+        <LoginModal onClose={() => setShowLogin(false)} onLogin={onLogin} tweaks={tweaks}/>
+      )}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        input[type=range] { appearance: none; height:4px; background:#e8e6e1; border-radius:2px; outline:none; }
+        input[type=range]::-webkit-slider-thumb { appearance:none; width:16px; height:16px; border-radius:50%; background:var(--accent,#E84545); cursor:pointer; }
+      `}</style>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

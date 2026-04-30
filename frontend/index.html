@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FunLab 拼豆 — Member Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: #FEF4F5;
+  color: #1A1A18;
+  overflow-x: hidden;
+}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0cec9; border-radius: 3px; }
+
+.pixel-bg {
+  background-image:
+    linear-gradient(rgba(26,26,24,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,26,24,0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes scaleIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.fade-in { animation: fadeIn 0.35s ease forwards; }
+.scale-in { animation: scaleIn 0.25s ease forwards; }
+
+input[type=range] { appearance: none; height:4px; background:#e8e6e1; border-radius:2px; outline:none; }
+input[type=range]::-webkit-slider-thumb { appearance:none; width:16px; height:16px; border-radius:50%; background:var(--accent,#F47A8A); cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+const T = {
+  accentRed: '#F47A8A',
+  accentOrange: '#6BB5E8',
+  bgColor: '#FEF4F5',
+  cardRadius: 8,
+};
+
+// ─── API HELPERS ──────────────────────────────────────────────────────────────
+const API_BASE = '/api';
+
+async function apiFetch(path, options = {}) {
+  const token = localStorage.getItem('pc_token');
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (options.body && typeof options.body === 'string') {
+    headers['Content-Type'] = 'application/json';
+  }
+  try {
+    return await fetch(API_BASE + path, { ...options, headers: { ...headers, ...options.headers } });
+  } catch (err) {
+    console.error('API error:', err);
+    return null;
+  }
+}
+
+function normalizePattern(p) {
+  return {
+    ...p,
+    gridW: p.grid_w,
+    gridH: p.grid_h,
+    faves: p.faves_count || 0,
+    palette: Array.isArray(p.palette) ? p.palette : JSON.parse(p.palette || '[]'),
+    tags: Array.isArray(p.tags) ? p.tags : JSON.parse(p.tags || '[]'),
+  };
+}
+
+// ─── FALLBACK DATA (used by BeadMapViewer when grid_data is absent) ───────────
+const BEAD_PALETTE = [
+  { id:'B001', name:'Cherry Red',   hex:'#CC2936' },
+  { id:'B002', name:'Sky Blue',     hex:'#4A90D9' },
+  { id:'B003', name:'Lemon Yellow', hex:'#F5C518' },
+  { id:'B004', name:'Forest Green', hex:'#2E7D32' },
+  { id:'B005', name:'Pure White',   hex:'#F5F5F0' },
+  { id:'B006', name:'Jet Black',    hex:'#1C1C1E' },
+  { id:'B007', name:'Peach',        hex:'#FFAB76' },
+  { id:'B008', name:'Lavender',     hex:'#9B72CF' },
+  { id:'B009', name:'Coral',        hex:'#FF6B6B' },
+  { id:'B010', name:'Teal',         hex:'#26A69A' },
+];
+
+function generateGrid(w, h, palette) {
+  return Array.from({length: h}, (_, y) =>
+    Array.from({length: w}, (_, x) => {
+      const i = Math.floor((Math.sin(x*0.7 + y*0.5)*0.5+0.5) * palette.length);
+      return palette[i % palette.length].id;
+    })
+  );
+}
+
+// ─── SHARED UI PIECES ─────────────────────────────────────────────────────────
+function Spinner({ size = 16, color = '#aaa' }) {
+  return (
+    <span style={{
+      display:'inline-block', width:size, height:size,
+      border:`2px solid ${color}`, borderTopColor:'transparent',
+      borderRadius:'50%', animation:'spin 0.6s linear infinite', flexShrink:0
+    }}/>
+  );
+}
+
+function PixelGridPreview({ color, w, h }) {
+  const ref = useRef();
+  const size = 160;
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    const cw = size/Math.min(w,20), ch = size/Math.min(h,20);
+    for (let y = 0; y < Math.min(h,20); y++) {
+      for (let x = 0; x < Math.min(w,20); x++) {
+        const v = (Math.sin(x*1.1+y*0.9)*0.5+0.5);
+        ctx.fillStyle = v > 0.6 ? color : v > 0.35 ? `${color}88` : '#f0ede8';
+        ctx.fillRect(x*cw+0.5, y*ch+0.5, cw-1, ch-1);
+      }
+    }
+  }, [color, w, h]);
+  return <canvas ref={ref} width={size} height={size} style={{imageRendering:'pixelated',opacity:0.9}}/>;
+}
+
+// ─── REAL CONVERSION PREVIEW ──────────────────────────────────────────────────
+function ConversionPreview({ result, maxSize = 160 }) {
+  const ref = useRef();
+  useEffect(() => {
+    if (!result || !ref.current) return;
+    const { rows, cols, cells } = result;
+    if (!rows || !cols || !cells) return;
+    const canvas = ref.current;
+    canvas.width = cols;
+    canvas.height = rows;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#f0ede8';
+    ctx.fillRect(0, 0, cols, rows);
+    for (const cell of cells) {
+      if (!cell.empty) {
+        ctx.fillStyle = cell.color_hex;
+        ctx.fillRect(cell.col - 1, cell.row - 1, 1, 1);
+      }
+    }
+  }, [result]);
+  if (!result) return null;
+  const { rows = 1, cols = 1 } = result;
+  const scale = Math.min(maxSize / cols, maxSize / rows);
+  return <canvas ref={ref} style={{width:Math.round(cols*scale),height:Math.round(rows*scale),imageRendering:'pixelated',borderRadius:6,display:'block'}}/>;
+}
+
+// ─── PATTERN CARD ─────────────────────────────────────────────────────────────
+function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
+  const [hover, setHover] = useState(false);
+  const sizeColor = { Small:'#10B981', Medium:'#F5A623', Large:'#F47A8A' }[pattern.size];
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={() => onOpen(pattern)}
+      style={{
+        background: '#fff', borderRadius: T.cardRadius, overflow: 'hidden', cursor: 'pointer',
+        border: hover ? `2px solid ${T.accentRed}` : '2px solid transparent',
+        transition: 'all 0.18s ease',
+        transform: hover ? 'translateY(-3px)' : 'none',
+        boxShadow: hover ? '0 8px 24px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.06)',
+      }}>
+      <div style={{height:160, background:`${pattern.preview_color}18`, display:'flex', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden'}}>
+        <PixelGridPreview color={pattern.preview_color} w={pattern.gridW} h={pattern.gridH}/>
+        <div style={{position:'absolute',top:10,right:10}}>
+          <button
+            onClick={e => { e.stopPropagation(); if(!isLoggedIn) return; onFave(pattern.id); }}
+            style={{
+              background: isFaved ? T.accentRed : 'rgba(255,255,255,0.9)',
+              border:'none', borderRadius:'50%', width:32, height:32,
+              cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+              transition:'all 0.15s', transform: isFaved ? 'scale(1.1)' : 'scale(1)',
+              boxShadow:'0 2px 8px rgba(0,0,0,0.15)'
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill={isFaved?'#fff':'#999'}>
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </button>
+        </div>
+        <div style={{position:'absolute',top:10,left:10}}>
+          <span style={{background:sizeColor,color:'#fff',fontSize:10,fontWeight:700,letterSpacing:'.06em',padding:'3px 8px',borderRadius:20,fontFamily:'Space Mono,monospace'}}>{pattern.size.toUpperCase()}</span>
+        </div>
+      </div>
+      <div style={{padding:'14px 16px 16px'}}>
+        <div style={{fontWeight:700,fontSize:15,marginBottom:6}}>{pattern.title}</div>
+        <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:10}}>
+          {(pattern.tags||[]).map(t => (
+            <span key={t} style={{background:'#f2f1ee',fontSize:11,padding:'2px 8px',borderRadius:20,color:'#666',fontWeight:500}}>{t}</span>
+          ))}
+        </div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{display:'flex',gap:3}}>
+            {(pattern.palette||[]).slice(0,5).map(c => (
+              <div key={c.id} style={{width:12,height:12,borderRadius:'50%',background:c.hex,border:'1px solid rgba(0,0,0,0.08)'}}/>
+            ))}
+          </div>
+          <span style={{fontSize:12,color:'#999',fontFamily:'Space Mono,monospace'}}>♥ {pattern.faves}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── NAVBAR ──────────────────────────────────────────────────────────────────
+function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
+  const isLoggedIn = !!user;
+  const isAdmin = user?.is_admin;
+  const initial = user?.name ? user.name[0].toUpperCase() : 'U';
+  return (
+    <nav style={{
+      position:'sticky',top:0,zIndex:100,
+      background:'rgba(250,250,248,0.92)',backdropFilter:'blur(12px)',
+      borderBottom:'1px solid #e8e6e1',
+      display:'flex',alignItems:'center',padding:'0 32px',height:60,
+    }}>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginRight:40,cursor:'pointer'}} onClick={() => setPage('gallery')}>
+        <div style={{width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0}}>
+          <img src="/funlab-logo.jpeg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab" onError={e=>e.target.style.display='none'}/>
+        </div>
+        <span style={{fontWeight:800,fontSize:17,letterSpacing:'-0.02em'}}>
+          <span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>拼豆</span>
+        </span>
+      </div>
+      <div style={{display:'flex',gap:4,flex:1}}>
+        {[['gallery','Browse'],['favorites','My Favorites']].map(([id,label]) => (
+          <button key={id} onClick={() => setPage(id)} style={{
+            background: page===id ? `${T.accentRed}15` : 'transparent',
+            color: page===id ? T.accentRed : '#555',
+            border:'none',borderRadius:8,padding:'6px 14px',
+            fontWeight: page===id ? 700 : 500,fontSize:14,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'
+          }}>{label}</button>
+        ))}
+        {isAdmin && (
+          <button onClick={() => setPage('admin')} style={{
+            background: page==='admin' ? `${T.accentRed}15` : 'transparent',
+            color: page==='admin' ? T.accentRed : '#555',
+            border:'none',borderRadius:8,padding:'6px 14px',
+            fontWeight: page==='admin' ? 700 : 500,fontSize:14,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'
+          }}>Admin</button>
+        )}
+      </div>
+      {isLoggedIn ? (
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          {isAdmin && (
+            <span style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',background:T.accentOrange,color:'#fff',padding:'3px 8px',borderRadius:20}}>ADMIN</span>
+          )}
+          <div style={{
+            width:34,height:34,borderRadius:'50%',
+            background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
+            display:'flex',alignItems:'center',justifyContent:'center',
+            color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer',userSelect:'none'
+          }} onClick={onLogout} title={`Logged in as ${user.name} — click to logout`}>{initial}</div>
+        </div>
+      ) : (
+        <button onClick={onLoginClick} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Sign In</button>
+      )}
+    </nav>
+  );
+}
+
+// ─── GALLERY PAGE ─────────────────────────────────────────────────────────────
+function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
+  const [search, setSearch] = useState('');
+  const [sizeFilter, setSizeFilter] = useState('All');
+  const isLoggedIn = !!user;
+
+  const filtered = patterns.filter(p => {
+    const matchSearch = !search ||
+      p.title.toLowerCase().includes(search.toLowerCase()) ||
+      (p.tags||[]).some(t => t.toLowerCase().includes(search.toLowerCase()));
+    const matchSize = sizeFilter === 'All' || p.size === sizeFilter;
+    return matchSearch && matchSize;
+  });
+
+  return (
+    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div style={{marginBottom:32}}>
+        <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>
+          Discover <span style={{color:T.accentRed}}>Bead Patterns</span>
+        </h1>
+        <p style={{color:'#888',fontSize:15}}>Convert your favorite images into beautiful pixel bead art</p>
+      </div>
+      <div style={{display:'flex',gap:12,marginBottom:32,flexWrap:'wrap',alignItems:'center'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,background:'#fff',border:'2px solid #e8e6e1',borderRadius:12,padding:'10px 16px',flex:1,maxWidth:400,transition:'border-color 0.15s'}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.5">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Search patterns… e.g. Mario, Flower"
+            style={{border:'none',outline:'none',fontSize:14,background:'transparent',width:'100%',fontFamily:'inherit',color:'#1A1A18'}}/>
+          {search && <button onClick={()=>setSearch('')} style={{background:'none',border:'none',cursor:'pointer',color:'#aaa',fontSize:16,lineHeight:1}}>×</button>}
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          {['All','Small','Medium','Large'].map(s => (
+            <button key={s} onClick={()=>setSizeFilter(s)} style={{
+              background: sizeFilter===s ? T.accentRed : '#fff',
+              color: sizeFilter===s ? '#fff' : '#666',
+              border: `2px solid ${sizeFilter===s ? T.accentRed : '#e8e6e1'}`,
+              borderRadius:8,padding:'8px 16px',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'
+            }}>{s}</button>
+          ))}
+        </div>
+        <span style={{fontSize:13,color:'#999',marginLeft:'auto'}}>
+          {loading
+            ? <Spinner size={14}/>
+            : <><span style={{fontFamily:'Space Mono,monospace',fontWeight:700,color:'#1A1A18'}}>{filtered.length}</span> patterns</>
+          }
+        </span>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
+        {filtered.map(p => (
+          <div key={p.id} className="fade-in">
+            <PatternCard pattern={p} onOpen={onOpen} isFaved={favIds.has(p.id)} onFave={onFave} isLoggedIn={isLoggedIn}/>
+          </div>
+        ))}
+        {!loading && filtered.length === 0 && (
+          <div style={{gridColumn:'1/-1',textAlign:'center',padding:'80px 0',color:'#bbb'}}>
+            <div style={{fontSize:48,marginBottom:12}}>🔍</div>
+            <div style={{fontSize:16,fontWeight:600}}>No patterns found</div>
+            <div style={{fontSize:13,marginTop:4}}>Try a different search or filter</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── BEAD MAP VIEWER ──────────────────────────────────────────────────────────
+function BeadMapViewer({ pattern, onClose, user }) {
+  const isLoggedIn = !!user;
+  const [crossed, setCrossed] = useState(new Set());
+  const [zoom, setZoom] = useState(1);
+  const [highlight, setHighlight] = useState(null);
+  const gridData = pattern.grid_data || generateGrid(pattern.gridW, pattern.gridH, pattern.palette);
+  const cellSize = Math.min(Math.floor(460 / pattern.gridW), 24);
+  const palette = pattern.palette || [];
+
+  const toggle = (key) => {
+    if (!isLoggedIn) return;
+    setCrossed(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const usedColors = {};
+  gridData.flat().forEach(id => { if (id) usedColors[id] = (usedColors[id]||0)+1; });
+  const totalBeads = pattern.gridW * pattern.gridH;
+  const doneBeads = crossed.size;
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(26,26,24,0.7)',backdropFilter:'blur(6px)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
+      <div className="scale-in" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:20,width:'min(920px,95vw)',maxHeight:'90vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 80px rgba(0,0,0,0.25)'}}>
+        {/* Header */}
+        <div style={{padding:'18px 24px',borderBottom:'1px solid #f0ede8',display:'flex',alignItems:'center',gap:16}}>
+          <div style={{flex:1}}>
+            <h2 style={{fontSize:20,fontWeight:800,letterSpacing:'-0.02em'}}>{pattern.title}</h2>
+            <div style={{fontSize:12,color:'#999',marginTop:2,fontFamily:'Space Mono,monospace'}}>
+              {pattern.gridW}×{pattern.gridH} beads · {Object.keys(usedColors).length} colors
+              {isLoggedIn && ` · ${doneBeads}/${totalBeads} placed`}
+            </div>
+          </div>
+          {isLoggedIn && (
+            <div style={{textAlign:'right'}}>
+              <div style={{fontSize:11,color:'#999',marginBottom:4,letterSpacing:'.06em',textTransform:'uppercase'}}>Progress</div>
+              <div style={{width:120,height:6,background:'#f0ede8',borderRadius:3,overflow:'hidden'}}>
+                <div style={{width:`${(doneBeads/totalBeads)*100}%`,height:'100%',background:`linear-gradient(90deg, ${T.accentRed}, ${T.accentOrange})`,transition:'width 0.3s'}}/>
+              </div>
+              <div style={{fontSize:11,color:T.accentRed,marginTop:3,fontWeight:700}}>{Math.round((doneBeads/totalBeads)*100)}%</div>
+            </div>
+          )}
+          <div style={{display:'flex',gap:4}}>
+            {[0.75,1,1.5,2].map(z=>(
+              <button key={z} onClick={()=>setZoom(z)} style={{background:zoom===z?T.accentRed:'#f2f1ee',color:zoom===z?'#fff':'#555',border:'none',borderRadius:6,padding:'5px 9px',fontSize:11,cursor:'pointer',fontFamily:'Space Mono,monospace',fontWeight:700}}>{z}×</button>
+            ))}
+          </div>
+          <button onClick={onClose} style={{background:'#f2f1ee',border:'none',borderRadius:8,width:34,height:34,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#555'}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{display:'flex',flex:1,overflow:'hidden',minHeight:0}}>
+          <div style={{flex:1,overflow:'auto',padding:24}}>
+            {!isLoggedIn && (
+              <div style={{background:`${T.accentOrange}15`,border:`1px solid ${T.accentOrange}40`,borderRadius:10,padding:'10px 16px',marginBottom:16,fontSize:13,color:'#8B6914',display:'flex',alignItems:'center',gap:8}}>
+                <span>🔒</span>
+                <span>Sign in to track your progress and cross off placed beads</span>
+              </div>
+            )}
+            <div style={{display:'inline-block',border:'1px solid #e8e6e1',borderRadius:8,overflow:'hidden',transform:`scale(${zoom})`,transformOrigin:'top left',transition:'transform 0.2s'}}>
+              {gridData.map((row, y) => (
+                <div key={y} style={{display:'flex'}}>
+                  {row.map((beadId, x) => {
+                    const bead = palette.find(b=>b.id===beadId) || {id:beadId,name:beadId,hex:'#e0e0e0'};
+                    const key = `${x},${y}`;
+                    const done = crossed.has(key);
+                    const isHighlighted = highlight === beadId;
+                    return (
+                      <div key={x}
+                        onClick={() => toggle(key)}
+                        onMouseEnter={() => setHighlight(beadId)}
+                        onMouseLeave={() => setHighlight(null)}
+                        style={{
+                          width:cellSize,height:cellSize,
+                          background: done ? '#f0ede8' : bead.hex,
+                          border:'0.5px solid rgba(0,0,0,0.06)',
+                          cursor: isLoggedIn ? 'pointer' : 'default',
+                          opacity: done ? 0.25 : isHighlighted ? 1 : 0.88,
+                          position:'relative',flexShrink:0,transition:'opacity 0.1s',
+                          display:'flex',alignItems:'center',justifyContent:'center',
+                        }}>
+                        {done && (
+                          <svg width={cellSize*0.6} height={cellSize*0.6} viewBox="0 0 10 10">
+                            <path d="M1.5 5 L4 7.5 L8.5 2.5" stroke="#888" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+                          </svg>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div style={{width:200,borderLeft:'1px solid #f0ede8',padding:'20px 16px',overflow:'auto',flexShrink:0}}>
+            <div style={{fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',color:'#aaa',fontWeight:700,marginBottom:12}}>Color Legend</div>
+            {Object.entries(usedColors).map(([id, count]) => {
+              const bead = palette.find(b=>b.id===id) || {id,name:id,hex:'#e0e0e0'};
+              const done = [...crossed].filter(k => {
+                const [cx,cy] = k.split(',').map(Number);
+                return gridData[cy]?.[cx] === id;
+              }).length;
+              return (
+                <div key={id}
+                  onMouseEnter={()=>setHighlight(id)}
+                  onMouseLeave={()=>setHighlight(null)}
+                  style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:8,marginBottom:4,cursor:'pointer',background:highlight===id?`${bead.hex}20`:'transparent',transition:'background 0.15s'}}>
+                  <div style={{width:18,height:18,borderRadius:4,background:bead.hex,flexShrink:0,border:'1px solid rgba(0,0,0,0.1)'}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{bead.name}</div>
+                    <div style={{fontSize:10,color:'#aaa',fontFamily:'Space Mono,monospace'}}>{count} beads</div>
+                  </div>
+                  {isLoggedIn && done > 0 && (
+                    <div style={{fontSize:10,color:T.accentRed,fontWeight:700,fontFamily:'Space Mono,monospace'}}>{done}</div>
+                  )}
+                </div>
+              );
+            })}
+            <button style={{width:'100%',marginTop:16,background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+              ↓ Download PDF
+            </button>
+            {isLoggedIn && crossed.size > 0 && (
+              <button onClick={()=>setCrossed(new Set())} style={{width:'100%',marginTop:8,background:'transparent',color:'#bbb',border:'1px solid #e8e6e1',borderRadius:8,padding:'8px 0',fontWeight:600,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Reset Progress</button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FAVORITES PAGE ───────────────────────────────────────────────────────────
+function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick }) {
+  const isLoggedIn = !!user;
+  const faved = patterns.filter(p => favIds.has(p.id));
+
+  if (!isLoggedIn) return (
+    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{textAlign:'center',maxWidth:360,padding:40}}>
+        <div style={{width:80,height:80,borderRadius:20,background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 24px',fontSize:36}}>♥</div>
+        <h2 style={{fontSize:24,fontWeight:800,marginBottom:8}}>Your Favorites</h2>
+        <p style={{color:'#888',fontSize:14,lineHeight:1.6,marginBottom:24}}>Sign in to save patterns to your favorites and access them anytime.</p>
+        <button onClick={onLoginClick} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:10,padding:'12px 32px',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'inherit'}}>Sign In to Continue</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div style={{marginBottom:32}}>
+        <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>My <span style={{color:T.accentRed}}>Favorites</span></h1>
+        <p style={{color:'#888',fontSize:15}}>{faved.length} saved pattern{faved.length !== 1 ? 's' : ''}</p>
+      </div>
+      {faved.length === 0 ? (
+        <div style={{textAlign:'center',padding:'80px 0',color:'#bbb'}}>
+          <div style={{fontSize:48,marginBottom:12}}>♡</div>
+          <div style={{fontSize:16,fontWeight:600}}>No favorites yet</div>
+          <div style={{fontSize:13,marginTop:4}}>Heart a pattern in the gallery to save it here</div>
+        </div>
+      ) : (
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
+          {faved.map(p => (
+            <div key={p.id} className="fade-in">
+              <PatternCard pattern={p} onOpen={onOpen} isFaved={true} onFave={onFave} isLoggedIn={true}/>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ADMIN PAGE ───────────────────────────────────────────────────────────────
+function AdminPage({ onPatternPublished }) {
+  const [step, setStep] = useState('upload');
+  const [dragging, setDragging] = useState(false);
+  const [uploaded, setUploaded] = useState(null);
+  const [settings, setSettings] = useState({ gridSize: '24x24', palette: 'MARD', quality: 85 });
+  const [processing, setProcessing] = useState(false);
+  const [processingResult, setProcessingResult] = useState(null);  // {variants:{...}} or single OCR result
+  const [selectedSize, setSelectedSize] = useState(null);
+  const [aiEnhancingSize, setAiEnhancingSize] = useState(null);
+  const aiEnhancingRef = useRef(new Set());
+  const [publishTitle, setPublishTitle] = useState('');
+  const [publishTags, setPublishTags] = useState('');
+  const [publishSize, setPublishSize] = useState('Medium');
+  const [publishing, setPublishing] = useState(false);
+  const [isGridImage, setIsGridImage] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState('');
+  const fileInputRef = useRef();
+
+  useEffect(() => {
+    apiFetch('/admin/stats').then(r => r?.json()).then(d => { if (d) setStats(d); });
+  }, []);
+
+  const handleFileSelect = (file) => {
+    if (!file) return;
+    setUploaded({ name: file.name, size: `${(file.size / 1024 / 1024).toFixed(1)} MB`, file });
+    setStep('configure');
+    setAiEnhancingSize(null);
+    aiEnhancingRef.current.clear();
+    setError('');
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleProcess = async () => {
+    if (!uploaded?.file) return;
+    setProcessing(true);
+    setError('');
+    const form = new FormData();
+    form.append('file', uploaded.file);
+    form.append('grid_size', settings.gridSize);
+    form.append('palette_name', settings.palette);
+    form.append('quality', settings.quality);
+    form.append('is_grid_image', String(isGridImage));
+    try {
+      const res = await apiFetch('/admin/upload', { method: 'POST', body: form });
+      if (!res?.ok) {
+        const err = await res?.json();
+        setError(err?.detail || 'Processing failed');
+        return;
+      }
+      const data = await res.json();
+      setProcessingResult(data);
+      setAiEnhancingSize(null);
+      aiEnhancingRef.current.clear();
+      if (data.variants) {
+        const keys = Object.keys(data.variants);
+        setSelectedSize(keys.includes('24x24') ? '24x24' : keys[Math.floor(keys.length / 2)]);
+      } else {
+        setSelectedSize(null);
+      }
+      setStep('preview');
+    } catch (err) {
+      setError('Connection error during processing');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const isMultiSize = processingResult?.variants != null;
+  const activeResult = isMultiSize ? processingResult?.variants?.[selectedSize] : processingResult;
+  const activeAiMeta = activeResult?.ai_enhancement;
+  const activeAiGrid = activeResult?.ai_grid;
+  const isActiveAiEnhancing = aiEnhancingSize && aiEnhancingSize === selectedSize;
+  const aiStatusText = activeAiGrid?.used
+    ? activeAiMeta?.error_type === 'safety_blocked'
+      ? 'Image edit rejected; OpenAI JSON grid used'
+      : 'OpenAI JSON grid preview'
+    : activeAiMeta?.used
+      ? 'AI enhanced preview'
+      : activeAiMeta?.error_type === 'safety_blocked'
+        ? 'OpenAI rejected this image edit request'
+        : `AI enhancement failed: ${activeAiMeta?.reason || 'unavailable'}`;
+
+  const markAiEnhancementForSize = (size, meta) => {
+    setProcessingResult(prev => {
+      if (!prev?.variants?.[size]) return prev;
+      return {
+        ...prev,
+        variants: {
+          ...prev.variants,
+          [size]: {
+            ...prev.variants[size],
+            ai_enhancement: meta,
+            ai_grid: meta.ai_grid,
+          },
+        },
+      };
+    });
+  };
+
+  useEffect(() => {
+    if (step !== 'preview' || isGridImage || !uploaded?.file || !processingResult?.variants || !selectedSize) return;
+    const current = processingResult.variants[selectedSize];
+    if (!current || current.ai_enhancement?.attempted || aiEnhancingRef.current.has(selectedSize)) return;
+
+    const requestedSize = selectedSize;
+    const runAiEnhancement = async () => {
+      aiEnhancingRef.current.add(requestedSize);
+      setAiEnhancingSize(requestedSize);
+      const form = new FormData();
+      form.append('file', uploaded.file);
+      form.append('grid_size', requestedSize);
+      form.append('palette_name', settings.palette);
+      form.append('quality', settings.quality);
+      try {
+        const res = await apiFetch('/admin/enhance-preview', { method: 'POST', body: form });
+        if (!res?.ok) {
+          const err = await res?.json();
+          const detail = err?.detail;
+          const detailMeta = typeof detail === 'object' && detail !== null ? detail : {};
+          const enhancementMeta = detailMeta.ai_enhancement || detailMeta;
+          const gridMeta = detailMeta.ai_grid;
+          markAiEnhancementForSize(requestedSize, {
+            attempted: true,
+            used: false,
+            provider: 'openai',
+            ...enhancementMeta,
+            reason: enhancementMeta.reason || (typeof detail === 'string' ? detail : 'AI enhancement failed'),
+            ai_grid: gridMeta,
+          });
+          return;
+        }
+        const enhanced = await res.json();
+        setProcessingResult(prev => {
+          if (!prev?.variants?.[requestedSize]) return prev;
+          return {
+            ...prev,
+            variants: {
+              ...prev.variants,
+              [requestedSize]: enhanced,
+            },
+          };
+        });
+      } catch (err) {
+        markAiEnhancementForSize(requestedSize, {
+          attempted: true,
+          used: false,
+          provider: 'openai',
+          reason: 'Connection error during AI enhancement',
+        });
+      } finally {
+        aiEnhancingRef.current.delete(requestedSize);
+        setAiEnhancingSize(current => current === requestedSize ? null : current);
+      }
+    };
+    runAiEnhancement();
+  }, [step, isGridImage, uploaded?.file, processingResult, selectedSize, settings.quality]);
+
+  const handlePublish = async () => {
+    if (!activeResult || !publishTitle.trim()) return;
+    setPublishing(true);
+    setError('');
+    const tags = publishTags.split(',').map(t => t.trim()).filter(Boolean);
+    try {
+      const res = await apiFetch('/admin/publish', {
+        method: 'POST',
+        body: JSON.stringify({ title: publishTitle.trim(), tags, size: publishSize, processing_result: activeResult }),
+      });
+      if (!res?.ok) {
+        const err = await res?.json();
+        setError(err?.detail || 'Publish failed');
+        return;
+      }
+      onPatternPublished && onPatternPublished();
+      setStep('upload');
+      setUploaded(null);
+      setProcessingResult(null);
+      setAiEnhancingSize(null);
+      setPublishTitle('');
+      setPublishTags('');
+      apiFetch('/admin/stats').then(r => r?.json()).then(d => { if (d) setStats(d); });
+    } catch (err) {
+      setError('Connection error during publish');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const inputStyle = {
+    width:'100%',border:'2px solid #e8e6e1',borderRadius:8,padding:'10px 14px',
+    fontSize:14,fontFamily:'inherit',outline:'none',background:'#fafaf8',
+    transition:'border-color 0.15s'
+  };
+
+  return (
+    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div style={{marginBottom:32}}>
+        <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>Admin <span style={{color:T.accentRed}}>Dashboard</span></h1>
+        <p style={{color:'#888',fontSize:15}}>Upload images and configure bead pattern conversion</p>
+      </div>
+
+      {/* Steps indicator */}
+      <div style={{display:'flex',gap:0,marginBottom:32,maxWidth:480}}>
+        {[['upload','01 Upload'],['configure','02 Configure'],['preview','03 Preview']].map(([id,label],i,arr) => {
+          const steps = ['upload','configure','preview'];
+          const active = step === id;
+          const done = steps.indexOf(step) > i;
+          return (
+            <React.Fragment key={id}>
+              <div style={{flex:1,padding:'8px 0',textAlign:'center',
+                background: active ? T.accentRed : done ? `${T.accentRed}20` : '#f2f1ee',
+                color: active ? '#fff' : done ? T.accentRed : '#aaa',
+                fontSize:12,fontWeight:700,letterSpacing:'.05em',
+                borderRadius: i===0?'8px 0 0 8px':i===arr.length-1?'0 8px 8px 0':0,
+                transition:'all 0.2s'
+              }}>{label}</div>
+              {i < arr.length-1 && <div style={{width:1,background:'#e8e6e1'}}/>}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {error && (
+        <div style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:10,padding:'10px 16px',marginBottom:20,fontSize:13,color:'#991B1B',maxWidth:640}}>
+          ⚠ {error}
+        </div>
+      )}
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 380px',gap:24,maxWidth:960}}>
+        <div>
+          {/* Step 1: Upload */}
+          {step === 'upload' && (
+            <div>
+              <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={e => handleFileSelect(e.target.files[0])}/>
+              <div
+                onDragOver={e=>{e.preventDefault();setDragging(true)}}
+                onDragLeave={()=>setDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                style={{border:`2px dashed ${dragging?T.accentRed:'#d0cec9'}`,borderRadius:16,padding:'60px 40px',textAlign:'center',background:dragging?`${T.accentRed}08`:'#fff',transition:'all 0.2s',cursor:'pointer'}}>
+                <div style={{width:72,height:72,borderRadius:16,background:`${T.accentRed}12`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px'}}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={T.accentRed} strokeWidth="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                </div>
+                <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>Drop image here</div>
+                <div style={{color:'#999',fontSize:13,marginBottom:20}}>or click to browse · JPG, PNG, WEBP up to 20 MB</div>
+                <span style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'10px 28px',fontWeight:700,fontSize:13,cursor:'pointer'}}>Choose File</span>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Configure */}
+          {step === 'configure' && uploaded && (
+            <div style={{background:'#fff',borderRadius:16,padding:28,border:'1px solid #f0ede8'}}>
+              <div style={{display:'flex',alignItems:'center',gap:14,padding:'12px 16px',background:'#f8f7f4',borderRadius:10,marginBottom:24}}>
+                <div style={{width:40,height:40,borderRadius:8,background:`${T.accentRed}15`,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill={T.accentRed} opacity=".7"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:14}}>{uploaded.name}</div>
+                  <div style={{fontSize:12,color:'#999'}}>{uploaded.size}</div>
+                </div>
+                <button onClick={()=>{setUploaded(null);setAiEnhancingSize(null);setStep('upload');}} style={{background:'none',border:'none',color:'#bbb',cursor:'pointer',fontSize:18}}>×</button>
+              </div>
+
+              {/* Image type toggle */}
+              <div
+                onClick={()=>setIsGridImage(v=>!v)}
+                style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',
+                  background:isGridImage?`${T.accentRed}08`:'#f8f7f4',
+                  border:`2px solid ${isGridImage?T.accentRed:'#e8e6e1'}`,
+                  borderRadius:10,marginBottom:20,cursor:'pointer',transition:'all 0.2s'}}>
+                <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${isGridImage?T.accentRed:'#ccc'}`,
+                  background:isGridImage?T.accentRed:'#fff',display:'flex',alignItems:'center',justifyContent:'center',
+                  flexShrink:0,transition:'all 0.15s'}}>
+                  {isGridImage && <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:13,color:isGridImage?T.accentRed:'#444'}}>This image is already a bead grid</div>
+                  <div style={{fontSize:12,color:'#999',marginTop:2}}>Enable OCR extraction — reads an existing grid with color legend at the bottom</div>
+                </div>
+              </div>
+
+              <div style={{marginBottom:20}}>
+                <label style={{display:'block',fontSize:13,fontWeight:600,marginBottom:8,color:'#555'}}>色号系统</label>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  {['MARD','COCO','漫漫','盼盼','咪小窝'].map(o=>(
+                    <button key={o} onClick={()=>setSettings(s=>({...s,palette:o}))} style={{
+                      background:settings.palette===o?T.accentRed:'#f2f1ee',
+                      color:settings.palette===o?'#fff':'#555',
+                      border:'none',borderRadius:8,padding:'7px 14px',fontSize:13,cursor:'pointer',fontFamily:'Space Mono,monospace',fontWeight:600,transition:'all 0.15s'
+                    }}>{o}</button>
+                  ))}
+                </div>
+                <div style={{fontSize:11,color:'#bbb',marginTop:6}}>Generated colors will be snapped to this 色号系统 before preview and publish.</div>
+              </div>
+
+              {!isGridImage && (
+                <div style={{marginBottom:24}}>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:13,fontWeight:600,marginBottom:8,color:'#555'}}>
+                    <label>Color Accuracy</label>
+                    <span style={{fontFamily:'Space Mono,monospace',color:T.accentRed}}>{settings.quality}%</span>
+                  </div>
+                  <input type="range" min="50" max="100" value={settings.quality} onChange={e=>setSettings(s=>({...s,quality:parseInt(e.target.value)}))} style={{width:'100%',accentColor:T.accentRed}}/>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'#bbb',marginTop:4}}><span>Fast</span><span>Accurate</span></div>
+                </div>
+              )}
+
+              <button onClick={handleProcess} disabled={processing} style={{
+                width:'100%',background:processing?'#e8e6e1':`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
+                color:processing?'#aaa':'#fff',border:'none',borderRadius:10,padding:'13px 0',fontWeight:700,fontSize:14,cursor:processing?'default':'pointer',fontFamily:'inherit',transition:'all 0.2s'
+              }}>
+                {processing
+                  ? <span style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10}}><Spinner size={14} color="#aaa"/>Processing…</span>
+                  : isGridImage ? 'Extract Bead Grid ✦' : 'Convert to Bead Map ✦'}
+              </button>
+            </div>
+          )}
+
+          {/* Step 3: Preview + Publish form */}
+          {step === 'preview' && processingResult && (
+            <div className="fade-in" style={{background:'#fff',borderRadius:16,padding:28,border:'1px solid #f0ede8'}}>
+              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+                <div style={{width:36,height:36,borderRadius:8,background:`${T.accentRed}15`,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.accentRed} strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:15}}>Conversion Complete!</div>
+                  <div style={{fontSize:12,color:'#999'}}>{activeResult?.rows}×{activeResult?.cols} grid · {(activeResult?.legend||[]).length} colors</div>
+                </div>
+              </div>
+
+              {/* Size picker — photo mode only */}
+              {isMultiSize && (
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:11,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:600,marginBottom:10}}>Choose Grid Size</div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
+                    {Object.entries(processingResult.variants).map(([size, res]) => {
+                      const sel = size === selectedSize;
+                      return (
+                        <div key={size} onClick={()=>setSelectedSize(size)} style={{
+                          border:`2px solid ${sel?T.accentRed:'#e8e6e1'}`,borderRadius:10,padding:'8px 6px',
+                          cursor:'pointer',textAlign:'center',
+                          background:sel?`${T.accentRed}08`:'#f8f7f4',transition:'all 0.15s'
+                        }}>
+                          <div style={{display:'flex',justifyContent:'center',alignItems:'center',marginBottom:6,minHeight:72}}>
+                            <ConversionPreview result={res} maxSize={72}/>
+                          </div>
+                          <div style={{fontFamily:'Space Mono,monospace',fontSize:11,fontWeight:700,color:sel?T.accentRed:'#555'}}>{res.cols}×{res.rows}</div>
+                          <div style={{fontSize:10,color:'#bbb',marginTop:2}}>{res.cols*res.rows} beads</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Main preview of selected size */}
+              <div style={{background:'#f8f7f4',borderRadius:10,padding:16,marginBottom:20,display:'flex',justifyContent:'center',alignItems:'center',minHeight:180}}>
+                <ConversionPreview result={activeResult} maxSize={200}/>
+              </div>
+
+              {isMultiSize && !isGridImage && (isActiveAiEnhancing || activeAiMeta) && (
+                <div style={{
+                  display:'flex',alignItems:'center',gap:8,marginTop:-8,marginBottom:20,
+                  color:isActiveAiEnhancing?T.accentRed:(activeAiMeta?.used?'#15803D':'#999'),
+                  fontSize:12,fontWeight:600
+                }}>
+                  {isActiveAiEnhancing && <Spinner size={12} color={T.accentRed}/>}
+                  <span>
+                    {isActiveAiEnhancing
+                      ? 'AI enhancing selected preview…'
+                      : aiStatusText}
+                  </span>
+                </div>
+              )}
+
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:20}}>
+                <div style={{background:`${T.accentRed}08`,borderRadius:8,padding:'12px 14px'}}>
+                  <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:4}}>Grid</div>
+                  <div style={{fontWeight:700,fontFamily:'Space Mono,monospace'}}>{activeResult?.cols}×{activeResult?.rows}</div>
+                </div>
+                <div style={{background:`${T.accentOrange}08`,borderRadius:8,padding:'12px 14px'}}>
+                  <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:4}}>Colors</div>
+                  <div style={{fontWeight:700,fontFamily:'Space Mono,monospace'}}>{(activeResult?.legend||[]).length}</div>
+                </div>
+              </div>
+
+              {/* Publish form */}
+              <div style={{borderTop:'1px solid #f0ede8',paddingTop:20,marginBottom:16}}>
+                <div style={{fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'#aaa',marginBottom:14}}>Publish to Library</div>
+                <div style={{marginBottom:14}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>Pattern Title *</label>
+                  <input value={publishTitle} onChange={e=>setPublishTitle(e.target.value)} placeholder="e.g. Super Mushroom" style={inputStyle}
+                    onFocus={e=>e.target.style.borderColor=T.accentRed} onBlur={e=>e.target.style.borderColor='#e8e6e1'}/>
+                </div>
+                <div style={{marginBottom:14}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>Tags <span style={{color:'#aaa',fontWeight:400}}>(comma-separated)</span></label>
+                  <input value={publishTags} onChange={e=>setPublishTags(e.target.value)} placeholder="e.g. Anime, Character, Cute" style={inputStyle}
+                    onFocus={e=>e.target.style.borderColor=T.accentRed} onBlur={e=>e.target.style.borderColor='#e8e6e1'}/>
+                </div>
+                <div style={{marginBottom:20}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:8}}>Size</label>
+                  <div style={{display:'flex',gap:8}}>
+                    {['Small','Medium','Large'].map(s=>(
+                      <button key={s} onClick={()=>setPublishSize(s)} style={{
+                        flex:1,background:publishSize===s?T.accentRed:'#f2f1ee',color:publishSize===s?'#fff':'#555',
+                        border:'none',borderRadius:8,padding:'8px 0',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'
+                      }}>{s}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{display:'flex',gap:10}}>
+                <button onClick={()=>{setStep('upload');setUploaded(null);setProcessingResult(null);setAiEnhancingSize(null);}} style={{flex:1,background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Upload Another</button>
+                <button onClick={handlePublish} disabled={publishing||isActiveAiEnhancing||!publishTitle.trim()} style={{
+                  flex:2,background:(publishing||isActiveAiEnhancing||!publishTitle.trim())?'#e8e6e1':`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
+                  color:(publishing||isActiveAiEnhancing||!publishTitle.trim())?'#aaa':'#fff',
+                  border:'none',borderRadius:8,padding:'11px 0',fontWeight:700,fontSize:13,cursor:(publishing||isActiveAiEnhancing||!publishTitle.trim())?'default':'pointer',fontFamily:'inherit',transition:'all 0.2s',display:'flex',alignItems:'center',justifyContent:'center',gap:8
+                }}>
+                  {publishing ? <><Spinner size={14}/> Publishing…</> : isActiveAiEnhancing ? <><Spinner size={14}/> Enhancing…</> : 'Publish to Library ✦'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right sidebar */}
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div style={{background:'#fff',borderRadius:16,padding:24,border:'1px solid #f0ede8'}}>
+            <div style={{fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'#aaa',marginBottom:16}}>Library Stats</div>
+            {[
+              {label:'Total Patterns', value: stats ? String(stats.total_patterns) : '—', icon:'▦'},
+              {label:'Total Favorites', value: stats ? stats.total_favorites.toLocaleString() : '—', icon:'♥'},
+            ].map(s=>(
+              <div key={s.label} style={{display:'flex',alignItems:'center',gap:14,marginBottom:14}}>
+                <div style={{width:38,height:38,borderRadius:8,background:`${T.accentRed}10`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,color:T.accentRed}}>{s.icon}</div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:20,fontFamily:'Space Mono,monospace',lineHeight:1}}>{s.value}</div>
+                  <div style={{fontSize:12,color:'#999',marginTop:2}}>{s.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{background:'#fff',borderRadius:16,padding:24,border:'1px solid #f0ede8'}}>
+            <div style={{fontSize:11,letterSpacing:'.1em',textTransform:'uppercase',color:'#aaa',marginBottom:16}}>Conversion Tips</div>
+            {[
+              'Use images with clear outlines and solid color regions',
+              'Smaller grids result in fewer required bead colors',
+              'High contrast images convert most accurately',
+            ].map((tip,i)=>(
+              <div key={i} style={{display:'flex',gap:10,marginBottom:12,alignItems:'flex-start'}}>
+                <div style={{width:20,height:20,borderRadius:4,background:T.accentOrange,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:10,fontWeight:700,marginTop:1}}>{i+1}</div>
+                <div style={{fontSize:13,color:'#666',lineHeight:1.5}}>{tip}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LOGIN MODAL ──────────────────────────────────────────────────────────────
+function LoginModal({ onClose, onLogin }) {
+  const [tab, setTab] = useState('login');
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    if (!email || !pass) { setError('Please fill in all fields'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      const endpoint = tab === 'login' ? '/auth/login' : '/auth/register';
+      const body = tab === 'login'
+        ? { email, password: pass }
+        : { email, password: pass, name: name.trim() || email.split('@')[0] };
+      const res = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(body) });
+      if (!res) {
+        setError('Cannot reach the server. Run: docker compose up --build');
+        return;
+      }
+      if (!res.ok) {
+        let detail = 'Authentication failed';
+        try { detail = (await res.json())?.detail || detail; } catch (_) {}
+        setError(detail);
+        return;
+      }
+      const data = await res.json();
+      onLogin(data.user, data.access_token);
+      onClose();
+    } catch (err) {
+      setError('Unexpected error: ' + (err?.message || String(err)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputStyle = {
+    width:'100%',border:'2px solid #e8e6e1',borderRadius:8,padding:'10px 14px',
+    fontSize:14,fontFamily:'inherit',outline:'none',background:'#fafaf8',transition:'border-color 0.15s'
+  };
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(26,26,24,0.6)',backdropFilter:'blur(6px)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={onClose}>
+      <div className="scale-in" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:20,width:380,padding:36,boxShadow:'0 24px 80px rgba(0,0,0,0.2)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:28,justifyContent:'center'}}>
+          <div style={{width:40,height:40,borderRadius:8,overflow:'hidden',flexShrink:0}}>
+            <img src="/funlab-logo.jpeg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab" onError={e=>e.target.style.display='none'}/>
+          </div>
+          <span style={{fontWeight:800,fontSize:18}}><span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>拼豆</span></span>
+        </div>
+
+        <div style={{display:'flex',background:'#f2f1ee',borderRadius:10,padding:4,marginBottom:24}}>
+          {['login','signup'].map(t=>(
+            <button key={t} onClick={()=>{setTab(t);setError('');}} style={{flex:1,padding:'8px 0',border:'none',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:13,transition:'all 0.15s',background:tab===t?'#fff':'transparent',color:tab===t?'#1A1A18':'#888',boxShadow:tab===t?'0 1px 4px rgba(0,0,0,0.1)':'none'}}>{t==='login'?'Sign In':'Create Account'}</button>
+          ))}
+        </div>
+
+        {tab === 'signup' && (
+          <div style={{marginBottom:14}}>
+            <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>Name</label>
+            <input type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" style={inputStyle}
+              onFocus={e=>e.target.style.borderColor=T.accentRed} onBlur={e=>e.target.style.borderColor='#e8e6e1'}/>
+          </div>
+        )}
+
+        {[{label:'Email',type:'email',value:email,set:setEmail,placeholder:'you@example.com'},{label:'Password',type:'password',value:pass,set:setPass,placeholder:'••••••••'}].map(f=>(
+          <div key={f.label} style={{marginBottom:14}}>
+            <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>{f.label}</label>
+            <input type={f.type} value={f.value} onChange={e=>f.set(e.target.value)} placeholder={f.placeholder}
+              onKeyDown={e=>e.key==='Enter'&&submit()}
+              style={inputStyle}
+              onFocus={e=>e.target.style.borderColor=T.accentRed}
+              onBlur={e=>e.target.style.borderColor='#e8e6e1'}/>
+          </div>
+        ))}
+
+        {error && <div style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'8px 12px',fontSize:12,color:'#991B1B',marginBottom:12}}>{error}</div>}
+
+        <button onClick={submit} disabled={loading} style={{
+          width:'100%',marginTop:4,
+          background:loading?'#e8e6e1':`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
+          color:loading?'#aaa':'#fff',border:'none',borderRadius:10,padding:'13px 0',
+          fontWeight:700,fontSize:14,cursor:loading?'default':'pointer',fontFamily:'inherit',transition:'all 0.2s',
+          display:'flex',alignItems:'center',justifyContent:'center',gap:8
+        }}>
+          {loading ? <><Spinner size={14}/> {tab==='login'?'Signing in…':'Creating account…'}</> : tab==='login'?'Sign In →':'Create Account →'}
+        </button>
+
+        <div style={{textAlign:'center',marginTop:14,fontSize:12,color:'#bbb'}}>
+          Tip: register with an <span style={{fontFamily:'Space Mono,monospace',color:'#888'}}>admin@…</span> email for admin access
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+function App() {
+  const [page, setPage] = useState(() => localStorage.getItem('pc_page') || 'gallery');
+  const [patterns, setPatterns] = useState([]);
+  const [patternsLoading, setPatternsLoading] = useState(true);
+  const [favIds, setFavIds] = useState(new Set());
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showLogin, setShowLogin] = useState(false);
+  const [openPattern, setOpenPattern] = useState(null);
+
+  const loadPatterns = useCallback(async () => {
+    setPatternsLoading(true);
+    try {
+      const res = await apiFetch('/patterns');
+      const data = res?.ok ? await res.json() : null;
+      if (data) setPatterns(data.map(normalizePattern));
+    } finally {
+      setPatternsLoading(false);
+    }
+  }, []);
+
+  const loadFavIds = useCallback(async () => {
+    const res = await apiFetch('/favorites/ids');
+    if (res?.ok) {
+      const ids = await res.json();
+      setFavIds(new Set(ids));
+    }
+  }, []);
+
+  // Validate existing token on mount
+  useEffect(() => {
+    const token = localStorage.getItem('pc_token');
+    if (!token) { setAuthLoading(false); return; }
+    apiFetch('/auth/me').then(async res => {
+      if (res?.ok) {
+        const userData = await res.json();
+        setUser(userData);
+        loadFavIds();
+      } else {
+        localStorage.removeItem('pc_token');
+      }
+    }).catch(() => localStorage.removeItem('pc_token'))
+      .finally(() => setAuthLoading(false));
+  }, []);
+
+  useEffect(() => { loadPatterns(); }, [loadPatterns]);
+  useEffect(() => { localStorage.setItem('pc_page', page); }, [page]);
+
+  const onFave = async (id) => {
+    if (!user) { setShowLogin(true); return; }
+    // Optimistic update
+    const wasFaved = favIds.has(id);
+    setFavIds(prev => {
+      const next = new Set(prev);
+      wasFaved ? next.delete(id) : next.add(id);
+      return next;
+    });
+    setPatterns(prev => prev.map(p => p.id === id
+      ? { ...p, faves: wasFaved ? p.faves - 1 : p.faves + 1, faves_count: wasFaved ? p.faves_count - 1 : p.faves_count + 1 }
+      : p
+    ));
+    const res = await apiFetch(`/favorites/${id}`, { method: 'POST' });
+    if (!res?.ok) {
+      // Revert on failure
+      setFavIds(prev => { const next = new Set(prev); wasFaved ? next.add(id) : next.delete(id); return next; });
+      setPatterns(prev => prev.map(p => p.id === id
+        ? { ...p, faves: wasFaved ? p.faves + 1 : p.faves - 1, faves_count: wasFaved ? p.faves_count + 1 : p.faves_count - 1 }
+        : p
+      ));
+    }
+  };
+
+  const onOpen = async (pattern) => {
+    // Fetch full pattern with grid_data
+    const res = await apiFetch(`/patterns/${pattern.id}`);
+    if (res?.ok) {
+      setOpenPattern(normalizePattern(await res.json()));
+    } else {
+      setOpenPattern(pattern);
+    }
+  };
+
+  const onLogin = (userData, token) => {
+    localStorage.setItem('pc_token', token);
+    setUser(userData);
+    loadFavIds();
+  };
+
+  const onLogout = () => {
+    localStorage.removeItem('pc_token');
+    setUser(null);
+    setFavIds(new Set());
+    if (page === 'admin') setPage('gallery');
+  };
+
+  if (authLoading) {
+    return (
+      <div style={{height:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#FEF4F5'}}>
+        <Spinner size={32} color={T.accentRed}/>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{minHeight:'100vh',background:T.bgColor}}>
+      <Navbar page={page} setPage={setPage} user={user} onLoginClick={() => setShowLogin(true)} onLogout={onLogout}/>
+
+      {page === 'gallery' && (
+        <GalleryPage patterns={patterns} loading={patternsLoading} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user}/>
+      )}
+      {page === 'favorites' && (
+        <FavoritesPage patterns={patterns} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user} onLoginClick={() => setShowLogin(true)}/>
+      )}
+      {page === 'admin' && user?.is_admin && (
+        <AdminPage onPatternPublished={loadPatterns}/>
+      )}
+
+      {openPattern && (
+        <BeadMapViewer pattern={openPattern} onClose={() => setOpenPattern(null)} user={user}/>
+      )}
+      {showLogin && (
+        <LoginModal onClose={() => setShowLogin(false)} onLogin={onLogin}/>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
