@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 
-COLOR_SYSTEMS = ("MARD", "COCO", "漫漫", "盼盼", "咪小窝")
+COLOR_SYSTEMS = ("MARD",)
 _MAPPING_PATH = Path(__file__).with_name("color_system_mapping.json")
 
 
@@ -24,8 +24,8 @@ def _indexed_colors() -> tuple[tuple[str, tuple[int, int, int], dict[str, str]],
 
 
 def _normalize_system(color_system: Optional[str]) -> str:
-    if color_system in COLOR_SYSTEMS:
-        return str(color_system)
+    if str(color_system or "").upper() == "MARD":
+        return "MARD"
     return "MARD"
 
 
@@ -56,7 +56,7 @@ def _distance_sq(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
 
 
 def nearest_bead_color(hex_value: str, color_system: str) -> dict[str, str]:
-    """Return the nearest mapped bead color for a hex value in the selected 色号系统."""
+    """Return the nearest mapped bead color from the MARD 221-color palette."""
     selected = _normalize_system(color_system)
     target = _hex_to_rgb(hex_value)
     best_hex = "#FFFFFF"

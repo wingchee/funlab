@@ -12,29 +12,8 @@ function groupColorsByPrefix(colors: PaletteColor[], selectedColorSystem: ColorS
   colors.forEach(color => {
     const displayKey = getDisplayColorKey(color.hex, selectedColorSystem);
     
-    let prefix: string;
-    if (selectedColorSystem === '盼盼' || selectedColorSystem === '咪小窝') {
-      // 对于纯数字的色号系统，按数字范围分组
-      if (/^\d+$/.test(displayKey)) {
-        const num = parseInt(displayKey, 10);
-        if (num <= 20) {
-          prefix = '1-20';
-        } else if (num <= 50) {
-          prefix = '21-50';
-        } else if (num <= 100) {
-          prefix = '51-100';
-        } else if (num <= 200) {
-          prefix = '101-200';
-        } else {
-          prefix = '200+';
-        }
-      } else {
-        prefix = '其他';
-      }
-    } else {
-      // 对于有字母前缀的色号系统，按字母前缀分组
-      prefix = displayKey.match(/^[A-Z]+/)?.[0] || '其他';
-    }
+    // MARD uses letter-prefixed color IDs, e.g. A1, B12, M8.
+    const prefix = displayKey.match(/^[A-Z]+/)?.[0] || '其他';
     
     if (!groups[prefix]) {
       groups[prefix] = [];
@@ -48,17 +27,9 @@ function groupColorsByPrefix(colors: PaletteColor[], selectedColorSystem: ColorS
       const displayKeyA = getDisplayColorKey(a.hex, selectedColorSystem);
       const displayKeyB = getDisplayColorKey(b.hex, selectedColorSystem);
       
-      if (selectedColorSystem === '盼盼' || selectedColorSystem === '咪小窝') {
-        // 对于纯数字色号，按数字大小排序
-        const numA = parseInt(displayKeyA, 10) || 0;
-        const numB = parseInt(displayKeyB, 10) || 0;
-        return numA - numB;
-      } else {
-        // 对于有字母前缀的色号，按字母+数字排序
-        const numA = parseInt(displayKeyA.replace(/^[A-Z]+/, ''), 10) || 0;
-        const numB = parseInt(displayKeyB.replace(/^[A-Z]+/, ''), 10) || 0;
+      const numA = parseInt(displayKeyA.replace(/^[A-Z]+/, ''), 10) || 0;
+      const numB = parseInt(displayKeyB.replace(/^[A-Z]+/, ''), 10) || 0;
       return numA - numB;
-      }
     });
   });
   

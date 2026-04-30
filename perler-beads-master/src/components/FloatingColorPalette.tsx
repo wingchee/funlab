@@ -283,7 +283,7 @@ const FloatingColorPalette: React.FC<FloatingColorPaletteProps> = ({
               onClick={onToggleFullPalette}
               className="w-full text-xs py-2 px-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              {showFullPalette ? `当前色板 (${colors.length})` : `完整色板 (${fullPaletteColors.length})`}
+              {showFullPalette ? `当前色板 (${colors.length})` : `MARD 221 色板 (${fullPaletteColors.length})`}
             </button>
           </div>
 

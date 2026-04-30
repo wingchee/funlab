@@ -19,6 +19,14 @@ services:
       - OPENAI_REQUEST_TIMEOUT=${OPENAI_REQUEST_TIMEOUT:-45}
     restart: unless-stopped
 
+  bead-editor:
+    build:
+      context: ./perler-beads-master
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
@@ -26,6 +34,7 @@ services:
       - "${PORT:-80}:80"
     depends_on:
       - backend
+      - bead-editor
     restart: unless-stopped
 
 volumes:

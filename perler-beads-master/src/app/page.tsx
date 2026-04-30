@@ -22,8 +22,6 @@ import DownloadSettingsModal, { gridLineColorOptions } from '../components/Downl
 import { downloadImage, importCsvData } from '../utils/imageDownloader';
 
 import { 
-  colorSystemOptions, 
-  convertPaletteToColorSystem, 
   getColorKeyByHex,
   getMardToHexMapping,
   sortColorsByHue,
@@ -132,7 +130,7 @@ export default function Home() {
   const [pixelationMode, setPixelationMode] = useState<PixelationMode>(PixelationMode.Dominant); // 默认为卡通模式
   
   // 新增：色号系统选择状态
-  const [selectedColorSystem, setSelectedColorSystem] = useState<ColorSystem>('MARD');
+  const selectedColorSystem: ColorSystem = 'MARD';
   
   const [activeBeadPalette, setActiveBeadPalette] = useState<PaletteColor[]>(() => {
       return fullBeadPalette; // 默认使用全部颜色
@@ -381,6 +379,7 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('pixelcraft') !== '1') return;
     setIsPixelCraftMode(true);
+    setIsFloatingPaletteOpen(false);
     const raw = localStorage.getItem('pixelcraft_editor_payload');
     if (!raw) return;
     try {
@@ -449,26 +448,14 @@ export default function Home() {
       updated_at: Date.now(),
       result,
     }));
-    window.opener?.postMessage({ type: 'pixelcraft-editor-result', result }, window.location.origin);
-    alert('Edited pattern saved back to PixelCraft.');
-    if (window.opener) window.close();
+    const params = new URLSearchParams(window.location.search);
+    const returnUrl = params.get('return') || '/';
+    window.location.href = returnUrl;
   };
 
   // --- Derived State ---
 
   // Update active palette based on selection and exclusions
-  useEffect(() => {
-    const newActiveBeadPalette = fullBeadPalette.filter(color => {
-      const normalizedHex = color.hex.toUpperCase();
-      const isSelectedInCustomPalette = customPaletteSelections[normalizedHex];
-      const isNotExcluded = !excludedColorKeys.has(normalizedHex);
-      return isSelectedInCustomPalette && isNotExcluded;
-    });
-    // 根据选择的色号系统转换调色板
-    const convertedPalette = convertPaletteToColorSystem(newActiveBeadPalette, selectedColorSystem);
-    setActiveBeadPalette(convertedPalette);
-  }, [customPaletteSelections, excludedColorKeys, remapTrigger, selectedColorSystem]);
-
   // ++ 添加：当状态变化时同步更新输入框的值 ++
   useEffect(() => {
     setGranularityInput(granularity.toString());
@@ -581,7 +568,7 @@ export default function Home() {
     localStorage.setItem('focusMode_selectedColorSystem', selectedColorSystem);
     
     // 跳转到专心拼豆页面
-    window.location.href = '/focus';
+    window.location.href = '/bead-editor/focus';
   };
 
   // 添加一个安全的文件输入触发函数
@@ -1176,6 +1163,7 @@ export default function Home() {
 
   // 修改useEffect中的pixelateImage调用，加入模式参数
   useEffect(() => {
+    if (isPixelCraftMode) return;
     if (originalImageSrc && activeBeadPalette.length > 0) {
        const timeoutId = setTimeout(() => {
          if (originalImageSrc && originalCanvasRef.current && pixelatedCanvasRef.current && activeBeadPalette.length > 0) {
@@ -1205,7 +1193,7 @@ export default function Home() {
         // setTotalBeadCount(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [originalImageSrc, granularity, similarityThreshold, customPaletteSelections, pixelationMode, remapTrigger]);
+  }, [originalImageSrc, granularity, similarityThreshold, customPaletteSelections, pixelationMode, remapTrigger, isPixelCraftMode]);
 
   // 确保文件输入框引用在组件挂载后正确设置
   useEffect(() => {
@@ -1226,53 +1214,10 @@ export default function Home() {
 
   // 强制显示专业工作台弹窗（每次进入页面都弹，引导用户前往新版）
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('pixelcraft') === '1') return;
     setShowDesktopModal(true);
   }, []);
-
-  // 添加URL重定向检查
-  useEffect(() => {
-    // 检查是否在浏览器环境中
-    if (typeof window !== 'undefined') {
-      const currentUrl = window.location.href;
-      const currentHostname = window.location.hostname;
-      const targetDomain = 'https://perlerbeadsold.zippland.com/';
-      
-      // 排除localhost和127.0.0.1等本地开发环境
-      const isLocalhost = currentHostname === 'localhost' || 
-                         currentHostname === '127.0.0.1' || 
-                         currentHostname.startsWith('192.168.') ||
-                         currentHostname.startsWith('10.') ||
-                         currentHostname.endsWith('.local');
-      
-      // 检查当前URL是否不是目标域名，且不是本地开发环境
-      if (!currentUrl.startsWith(targetDomain) && !isLocalhost) {
-        console.log(`当前URL: ${currentUrl}`);
-        console.log(`目标URL: ${targetDomain}`);
-        console.log('正在重定向到官方域名...');
-        
-        // 保留当前路径和查询参数
-        const currentPath = window.location.pathname;
-        const currentSearch = window.location.search;
-        const currentHash = window.location.hash;
-        
-        // 构建完整的目标URL
-        let redirectUrl = targetDomain;
-        
-        // 如果不是根路径，添加路径
-        if (currentPath && currentPath !== '/') {
-          redirectUrl = redirectUrl.replace(/\/$/, '') + currentPath;
-        }
-        
-        // 添加查询参数和哈希
-        redirectUrl += currentSearch + currentHash;
-        
-        // 执行重定向
-        window.location.replace(redirectUrl);
-      } else if (isLocalhost) {
-        console.log(`检测到本地开发环境 (${currentHostname})，跳过重定向`);
-      }
-    }
-  }, []); // 只在组件首次挂载时执行
 
     // --- Download function (ensure filename includes palette) ---
     const handleDownloadRequest = (options?: GridDownloadOptions) => {
@@ -2063,6 +2008,7 @@ export default function Home() {
     // 使用色相排序而不是色号排序
     return sortColorsByHue(selectedColors);
   }, [customPaletteSelections, selectedColorSystem]);
+  const showPixelCraftWorkspace = isPixelCraftMode && Boolean(originalImageSrc);
 
   return (
     <>
@@ -2070,24 +2016,16 @@ export default function Home() {
     <style dangerouslySetInnerHTML={{ __html: floatAnimation }} />
     
     {/* PWA 安装按钮 */}
-    <InstallPWA />
+    {!isPixelCraftMode && <InstallPWA />}
 
     {isPixelCraftMode && (
-      <div className="fixed top-3 left-1/2 z-[9998] w-[calc(100%-24px)] max-w-3xl -translate-x-1/2 rounded-xl border border-[#E8E6E1] bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-md">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm font-bold text-[#1A1A18]">PixelCraft Edit Mode</div>
-            <div className="text-xs text-[#888]">Make final bead-level adjustments, then save the edited pattern back before publishing to the gallery.</div>
-          </div>
-          <button
-            onClick={handleSaveToPixelCraft}
-            disabled={!mappedPixelData || !gridDimensions}
-            className="rounded-lg bg-gradient-to-r from-[#F47A8A] to-[#6BB5E8] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Save to PixelCraft
-          </button>
-        </div>
-      </div>
+      <button
+        onClick={handleSaveToPixelCraft}
+        disabled={!mappedPixelData || !gridDimensions}
+        className="fixed top-4 right-20 z-[9998] rounded-lg bg-gradient-to-r from-[#F47A8A] to-[#6BB5E8] px-5 py-3 text-sm font-bold text-white shadow-xl transition hover:shadow-2xl disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Done
+      </button>
     )}
     
     {/* ++ 修改：添加 onLoad 回调函数 ++ */}
@@ -2135,9 +2073,9 @@ export default function Home() {
     />
 
     {/* Apply dark mode styles to the main container */}
-    <div className={`min-h-screen p-4 sm:p-6 flex flex-col items-center bg-gradient-to-b from-[#FEF4F5] to-white font-[family-name:var(--font-geist-sans)] overflow-x-hidden ${isPixelCraftMode ? 'pt-24' : ''}`}>
+    <div className={`min-h-screen flex flex-col items-center bg-gradient-to-b from-[#FEF4F5] to-white font-[family-name:var(--font-geist-sans)] ${isPixelCraftMode ? 'h-screen overflow-hidden p-0' : 'overflow-x-hidden p-4 sm:p-6'}`}>
       {/* Apply dark mode styles to the header */}
-      <header className="w-full md:max-w-4xl text-center mt-6 mb-8 sm:mt-8 sm:mb-10 relative overflow-hidden">
+      {!showPixelCraftWorkspace && <header className="w-full md:max-w-4xl text-center mt-6 mb-8 sm:mt-8 sm:mb-10 relative overflow-hidden">
         {/* Adjust decorative background colors for dark mode */}
         <div className="absolute top-0 left-0 w-48 h-48 bg-blue-100 dark:bg-blue-900 rounded-full opacity-30 dark:opacity-20 blur-3xl"></div>
         <div className="absolute bottom-0 right-0 w-48 h-48 bg-pink-100 dark:bg-pink-900 rounded-full opacity-30 dark:opacity-20 blur-3xl"></div>
@@ -2351,12 +2289,18 @@ export default function Home() {
           {/* 来源提示 */}
           <p className="mt-2 text-[10px] text-gray-400 dark:text-gray-500">发布平台请标注来源或保留图片水印及标识</p>
         </div>
-      </header>
+      </header>}
 
       {/* Apply dark mode styles to the main section */}
-      <main ref={mainRef} className="w-full md:max-w-4xl flex flex-col items-center space-y-5 sm:space-y-6 relative overflow-hidden">
+      <main
+        ref={mainRef}
+        className={showPixelCraftWorkspace
+          ? 'relative flex h-screen w-full items-center justify-center overflow-hidden px-4 py-16'
+          : 'w-full md:max-w-4xl flex flex-col items-center space-y-5 sm:space-y-6 relative overflow-hidden'
+        }
+      >
         {/* Apply dark mode styles to the Drop Zone */}
-        <div
+        {!showPixelCraftWorkspace && <div
           onDrop={handleDrop} onDragOver={handleDragOver} onDragEnter={handleDragOver}
           onClick={isMounted ? triggerFileInput : undefined}
           className={`border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 sm:p-8 text-center ${isMounted ? 'cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-800' : 'cursor-wait'} transition-all duration-300 w-full md:max-w-md flex flex-col justify-center items-center shadow-sm hover:shadow-md`}
@@ -2370,10 +2314,10 @@ export default function Home() {
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">拖放图片到此处，或<span className="font-medium text-blue-600 dark:text-blue-400">点击选择文件</span></p>
           {/* Text color */}
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">支持 JPG, PNG, GIF 图片格式，或 CSV 数据文件</p>
-        </div>
+        </div>}
 
         {/* Apply dark mode styles to the Tip Box */}
-        {!originalImageSrc && (
+        {!showPixelCraftWorkspace && !originalImageSrc && (
           <div className="w-full md:max-w-md bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 p-3 rounded-lg border border-blue-100 dark:border-gray-600 shadow-sm">
             {/* Icon color */}
             <p className="text-xs text-indigo-700 dark:text-indigo-300 flex items-start">
@@ -2390,7 +2334,7 @@ export default function Home() {
 
         {/* Controls and Output Area */}
         {originalImageSrc && (
-          <div className="w-full flex flex-col items-center space-y-5 sm:space-y-6">
+          <div className={showPixelCraftWorkspace ? 'flex h-full w-full flex-col items-center justify-center' : 'w-full flex flex-col items-center space-y-5 sm:space-y-6'}>
             {/* ++ HIDE Control Row in manual mode ++ */}
             {!isManualColoringMode && (
               /* 修改控制面板网格布局 */
@@ -2473,20 +2417,8 @@ export default function Home() {
                 {/* 色号系统选择器 */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">色号系统:</label>
-                  <div className="flex flex-wrap gap-2">
-                    {colorSystemOptions.map(option => (
-                      <button
-                        key={option.key}
-                        onClick={() => setSelectedColorSystem(option.key as ColorSystem)}
-                        className={`px-3 py-2 text-sm rounded-lg border transition-all duration-200 flex-shrink-0 ${
-                          selectedColorSystem === option.key
-                            ? 'bg-blue-500 text-white border-blue-500 shadow-md transform scale-105'
-                            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-600'
-                        }`}
-                      >
-                        {option.name}
-                      </button>
-                    ))}
+                  <div className="inline-flex rounded-lg border border-blue-500 bg-blue-500 px-3 py-2 text-sm font-semibold text-white shadow-md">
+                    MARD 221
                   </div>
                 </div>
 
@@ -2537,11 +2469,11 @@ export default function Home() {
             )}
 
             {/* Output Section */}
-            <div className="w-full md:max-w-2xl">
+            <div className={showPixelCraftWorkspace ? 'flex h-full w-full items-center justify-center' : 'w-full md:max-w-2xl'}>
               <canvas ref={originalCanvasRef} className="hidden"></canvas>
 
               {/* ++ 手动编辑模式提示信息 ++ */}
-              {isManualColoringMode && mappedPixelData && gridDimensions && (
+              {!showPixelCraftWorkspace && isManualColoringMode && mappedPixelData && gridDimensions && (
                 <div className="w-full mb-4 p-3 bg-blue-50 dark:bg-gray-800 rounded-lg shadow-sm border border-blue-100 dark:border-gray-700">
                   <div className="flex justify-center">
                     <div className="bg-blue-50 dark:bg-gray-700 border border-blue-100 dark:border-gray-600 rounded-lg p-2 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 text-xs text-gray-600 dark:text-gray-300 w-full sm:w-auto">
@@ -2565,7 +2497,7 @@ export default function Home() {
 
               {/* Canvas Preview Container */}
               {/* Apply dark mode styles */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
+              <div className={showPixelCraftWorkspace ? 'flex h-full w-full items-center justify-center' : 'bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md border border-gray-100 dark:border-gray-700'}>
                 {/* 大画布提示信息 */}
                 {gridDimensions && gridDimensions.N > 100 && (
                   <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-300 text-center">
@@ -2578,15 +2510,21 @@ export default function Home() {
                   </div>
                 )}
                  {/* Inner container background - 允许水平滚动以适应大画布 */}
-                <div className="flex justify-center mb-3 sm:mb-4 bg-gray-100 dark:bg-gray-700 p-2 rounded-lg overflow-x-auto overflow-y-hidden"
-                     style={{ minHeight: '150px' }}>
+	                <div
+                    className={showPixelCraftWorkspace
+                      ? 'flex h-full w-full items-center justify-center overflow-auto'
+                      : 'flex justify-center mb-3 sm:mb-4 bg-gray-100 dark:bg-gray-700 p-2 rounded-lg overflow-x-auto overflow-y-hidden'
+                    }
+                    style={showPixelCraftWorkspace ? undefined : { minHeight: '150px' }}
+                  >
                   {/* PixelatedPreviewCanvas component needs internal changes for dark mode drawing */}
                   <PixelatedPreviewCanvas
                     canvasRef={pixelatedCanvasRef}
-                    mappedPixelData={mappedPixelData}
-                    gridDimensions={gridDimensions}
-                    isManualColoringMode={isManualColoringMode}
-                    onInteraction={handleCanvasInteraction}
+	                    mappedPixelData={mappedPixelData}
+	                    gridDimensions={gridDimensions}
+	                    isManualColoringMode={isManualColoringMode}
+	                    fitToViewport={showPixelCraftWorkspace}
+	                    onInteraction={handleCanvasInteraction}
                     highlightColorKey={highlightColorKey}
                     onHighlightComplete={handleHighlightComplete}
                   />
@@ -2819,9 +2757,10 @@ export default function Home() {
           setIsMagnifierActive(false);
           setMagnifierSelectionArea(null);
         }}
-        onToggleMagnifier={handleToggleMagnifier}
-        isMagnifierActive={isMagnifierActive}
-      />
+	        onToggleMagnifier={handleToggleMagnifier}
+	        isMagnifierActive={isMagnifierActive}
+	        showExitManualMode={!isPixelCraftMode}
+	      />
 
       {/* 悬浮调色盘 */}
       {isManualColoringMode && (
@@ -2877,7 +2816,7 @@ export default function Home() {
       )}
 
       {/* Apply dark mode styles to the Footer */}
-      <footer className="w-full md:max-w-4xl mt-10 mb-6 py-6 text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800/50 rounded-lg shadow-inner">
+	      {!isPixelCraftMode && <footer className="w-full md:max-w-4xl mt-10 mb-6 py-6 text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800/50 rounded-lg shadow-inner">
 
         {/* Donation button styles are likely fine */}
         <button
@@ -2900,7 +2839,7 @@ export default function Home() {
         <p className="font-medium text-gray-600 dark:text-gray-300">
           七卡瓦 拼豆底稿生成器 &copy; {new Date().getFullYear()}
         </p>
-      </footer>
+	      </footer>}
 
       {/* Donation Modal - 现在使用新的组件 */}
       <DonationModal isOpen={isDonationModalOpen} onClose={() => setIsDonationModalOpen(false)} />
