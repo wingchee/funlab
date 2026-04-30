@@ -9,6 +9,7 @@ interface FloatingToolbarProps {
   onExitManualMode: () => void;
   onToggleMagnifier: () => void;
   isMagnifierActive: boolean;
+  showExitManualMode?: boolean;
 }
 
 const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
@@ -17,7 +18,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
   onTogglePalette,
   onExitManualMode,
   onToggleMagnifier,
-  isMagnifierActive
+  isMagnifierActive,
+  showExitManualMode = true
 }) => {
   if (!isManualColoringMode) return null;
 
@@ -53,16 +55,17 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
         </svg>
       </button>
 
-      {/* 退出手动编辑模式按钮 */}
-      <button
-        onClick={onExitManualMode}
-        className="w-12 h-12 rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 transition-all duration-200 flex items-center justify-center"
-        title="退出手动编辑模式"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      {showExitManualMode && (
+        <button
+          onClick={onExitManualMode}
+          className="w-12 h-12 rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 transition-all duration-200 flex items-center justify-center"
+          title="退出手动编辑模式"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 };

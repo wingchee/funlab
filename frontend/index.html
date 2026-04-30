@@ -54,6 +54,8 @@ const T = {
   cardRadius: 8,
 };
 
+const AI_ENHANCEMENT_ENABLED = false;
+
 // ─── API HELPERS ──────────────────────────────────────────────────────────────
 const API_BASE = '/api';
 
@@ -527,7 +529,7 @@ function AdminPage({ onPatternPublished }) {
   const [step, setStep] = useState('upload');
   const [dragging, setDragging] = useState(false);
   const [uploaded, setUploaded] = useState(null);
-  const [settings, setSettings] = useState({ gridSize: '24x24', palette: 'MARD', quality: 85 });
+  const [settings, setSettings] = useState({ gridSize: '24x24', quality: 85 });
   const [processing, setProcessing] = useState(false);
   const [processingResult, setProcessingResult] = useState(null);  // {variants:{...}} or single OCR result
   const [selectedSize, setSelectedSize] = useState(null);
@@ -540,19 +542,36 @@ function AdminPage({ onPatternPublished }) {
   const [isGridImage, setIsGridImage] = useState(false);
   const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
+  const [editorStatus, setEditorStatus] = useState('');
   const fileInputRef = useRef();
+  const editorResultTimestampRef = useRef(0);
 
-  useEffect(() => {
-    apiFetch('/admin/stats').then(r => r?.json()).then(d => { if (d) setStats(d); });
-  }, []);
+  const resetFileInput = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleFileSelect = (file) => {
     if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      setError('Please choose a JPG, PNG, or WEBP image');
+      resetFileInput();
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setError('Image must be 20 MB or smaller');
+      resetFileInput();
+      return;
+    }
+    localStorage.removeItem('pixelcraft_admin_draft');
+    localStorage.removeItem('pixelcraft_editor_payload');
+    localStorage.removeItem('pixelcraft_editor_result');
     setUploaded({ name: file.name, size: `${(file.size / 1024 / 1024).toFixed(1)} MB`, file });
     setStep('configure');
     setAiEnhancingSize(null);
     aiEnhancingRef.current.clear();
+    setEditorStatus('');
     setError('');
+    resetFileInput();
   };
 
   const handleDrop = (e) => {
@@ -566,10 +585,11 @@ function AdminPage({ onPatternPublished }) {
     if (!uploaded?.file) return;
     setProcessing(true);
     setError('');
+    setEditorStatus('');
     const form = new FormData();
     form.append('file', uploaded.file);
     form.append('grid_size', settings.gridSize);
-    form.append('palette_name', settings.palette);
+    form.append('palette_name', 'MARD');
     form.append('quality', settings.quality);
     form.append('is_grid_image', String(isGridImage));
     try {
@@ -612,6 +632,141 @@ function AdminPage({ onPatternPublished }) {
         ? 'OpenAI rejected this image edit request'
         : `AI enhancement failed: ${activeAiMeta?.reason || 'unavailable'}`;
 
+  const applyEditedGridResult = useCallback((result) => {
+    if (!result?.rows || !result?.cols || !Array.isArray(result.cells)) {
+      setError('Editor returned an invalid grid result');
+      return false;
+    }
+
+    setProcessingResult(prev => {
+      if (prev?.variants && selectedSize) {
+        return {
+          ...prev,
+          variants: {
+            ...prev.variants,
+            [selectedSize]: result,
+          },
+        };
+      }
+      return result;
+    });
+    setError('');
+    setEditorStatus('Edited grid received. Preview updated.');
+    return true;
+  }, [selectedSize]);
+
+  const consumeEditorResult = useCallback((payload) => {
+    const updatedAt = Number(payload?.updated_at || Date.now());
+    if (updatedAt <= editorResultTimestampRef.current) return false;
+    if (!applyEditedGridResult(payload?.result)) return false;
+    editorResultTimestampRef.current = updatedAt;
+    localStorage.removeItem('pixelcraft_editor_result');
+    return true;
+  }, [applyEditedGridResult]);
+
+  const restorePixelCraftDraft = useCallback(() => {
+    const rawDraft = localStorage.getItem('pixelcraft_admin_draft');
+    if (!rawDraft) return false;
+
+    try {
+      const draft = JSON.parse(rawDraft);
+      const rawResult = localStorage.getItem('pixelcraft_editor_result');
+      const editorPayload = rawResult ? JSON.parse(rawResult) : null;
+      const editedResult = editorPayload?.result;
+      const restoredSelectedSize = draft.selectedSize || null;
+      let restoredProcessingResult = draft.processingResult;
+
+      if (editedResult?.rows && editedResult?.cols && Array.isArray(editedResult.cells)) {
+        if (restoredProcessingResult?.variants && restoredSelectedSize) {
+          restoredProcessingResult = {
+            ...restoredProcessingResult,
+            variants: {
+              ...restoredProcessingResult.variants,
+              [restoredSelectedSize]: editedResult,
+            },
+          };
+        } else {
+          restoredProcessingResult = editedResult;
+        }
+        editorResultTimestampRef.current = Number(editorPayload.updated_at || Date.now());
+        localStorage.removeItem('pixelcraft_editor_result');
+        setEditorStatus('Edited grid received. Preview updated.');
+      } else {
+        setEditorStatus('Draft restored. You can keep editing or publish.');
+      }
+
+      if (!restoredProcessingResult) return false;
+      setUploaded(draft.uploaded || null);
+      setSettings(draft.settings || { gridSize: '24x24', quality: 85 });
+      setProcessingResult(restoredProcessingResult);
+      setSelectedSize(restoredSelectedSize);
+      setPublishTitle(draft.publishTitle || '');
+      setPublishTags(draft.publishTags || '');
+      setPublishSize(draft.publishSize || 'Medium');
+      setIsGridImage(Boolean(draft.isGridImage));
+      setStep('preview');
+      setAiEnhancingSize(null);
+      aiEnhancingRef.current.clear();
+      setError('');
+      return true;
+    } catch (err) {
+      console.error('Unable to restore PixelCraft draft:', err);
+      setError('Unable to restore the edited grid draft');
+      localStorage.removeItem('pixelcraft_admin_draft');
+      localStorage.removeItem('pixelcraft_editor_result');
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      const raw = localStorage.getItem('pixelcraft_editor_result');
+      if (!raw) return;
+      try {
+        consumeEditorResult(JSON.parse(raw));
+      } catch (err) {
+        console.error('Unable to read editor result:', err);
+        setError('Unable to read the edited grid result');
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [consumeEditorResult]);
+
+  useEffect(() => {
+    apiFetch('/admin/stats').then(r => r?.json()).then(d => { if (d) setStats(d); });
+    restorePixelCraftDraft();
+  }, [restorePixelCraftDraft]);
+
+  const handleEditGrid = () => {
+    if (!activeResult) return;
+    const payload = {
+      source: 'pixelcraft-admin',
+      updated_at: Date.now(),
+      selected_size: selectedSize,
+      image: { source_name: uploaded?.name || activeResult.image?.source_name || 'pattern' },
+      result: activeResult,
+    };
+    localStorage.setItem('pixelcraft_admin_draft', JSON.stringify({
+      uploaded: uploaded ? { name: uploaded.name, size: uploaded.size } : null,
+      settings,
+      processingResult,
+      selectedSize,
+      publishTitle,
+      publishTags,
+      publishSize,
+      isGridImage,
+    }));
+    localStorage.setItem('pixelcraft_editor_payload', JSON.stringify(payload));
+    localStorage.removeItem('pixelcraft_editor_result');
+    localStorage.setItem('pc_page', 'admin');
+    setEditorStatus('Opening editor...');
+    window.location.href = '/bead-editor?pixelcraft=1&return=%2F';
+  };
+
   const markAiEnhancementForSize = (size, meta) => {
     setProcessingResult(prev => {
       if (!prev?.variants?.[size]) return prev;
@@ -630,6 +785,7 @@ function AdminPage({ onPatternPublished }) {
   };
 
   useEffect(() => {
+    if (!AI_ENHANCEMENT_ENABLED) return;
     if (step !== 'preview' || isGridImage || !uploaded?.file || !processingResult?.variants || !selectedSize) return;
     const current = processingResult.variants[selectedSize];
     if (!current || current.ai_enhancement?.attempted || aiEnhancingRef.current.has(selectedSize)) return;
@@ -641,7 +797,7 @@ function AdminPage({ onPatternPublished }) {
       const form = new FormData();
       form.append('file', uploaded.file);
       form.append('grid_size', requestedSize);
-      form.append('palette_name', settings.palette);
+      form.append('palette_name', 'MARD');
       form.append('quality', settings.quality);
       try {
         const res = await apiFetch('/admin/enhance-preview', { method: 'POST', body: form });
@@ -707,8 +863,11 @@ function AdminPage({ onPatternPublished }) {
       setUploaded(null);
       setProcessingResult(null);
       setAiEnhancingSize(null);
+      setEditorStatus('');
       setPublishTitle('');
       setPublishTags('');
+      localStorage.removeItem('pixelcraft_admin_draft');
+      localStorage.removeItem('pixelcraft_editor_payload');
       apiFetch('/admin/stats').then(r => r?.json()).then(d => { if (d) setStats(d); });
     } catch (err) {
       setError('Connection error during publish');
@@ -762,12 +921,21 @@ function AdminPage({ onPatternPublished }) {
           {/* Step 1: Upload */}
           {step === 'upload' && (
             <div>
-              <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={e => handleFileSelect(e.target.files[0])}/>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                style={{display:'none'}}
+                onChange={e => {
+                  handleFileSelect(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
               <div
                 onDragOver={e=>{e.preventDefault();setDragging(true)}}
                 onDragLeave={()=>setDragging(false)}
                 onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => { resetFileInput(); fileInputRef.current?.click(); }}
                 style={{border:`2px dashed ${dragging?T.accentRed:'#d0cec9'}`,borderRadius:16,padding:'60px 40px',textAlign:'center',background:dragging?`${T.accentRed}08`:'#fff',transition:'all 0.2s',cursor:'pointer'}}>
                 <div style={{width:72,height:72,borderRadius:16,background:`${T.accentRed}12`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px'}}>
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={T.accentRed} strokeWidth="1.5">
@@ -792,7 +960,7 @@ function AdminPage({ onPatternPublished }) {
                   <div style={{fontWeight:700,fontSize:14}}>{uploaded.name}</div>
                   <div style={{fontSize:12,color:'#999'}}>{uploaded.size}</div>
                 </div>
-                <button onClick={()=>{setUploaded(null);setAiEnhancingSize(null);setStep('upload');}} style={{background:'none',border:'none',color:'#bbb',cursor:'pointer',fontSize:18}}>×</button>
+                <button onClick={()=>{setUploaded(null);setAiEnhancingSize(null);resetFileInput();setStep('upload');}} style={{background:'none',border:'none',color:'#bbb',cursor:'pointer',fontSize:18}}>×</button>
               </div>
 
               {/* Image type toggle */}
@@ -815,16 +983,10 @@ function AdminPage({ onPatternPublished }) {
 
               <div style={{marginBottom:20}}>
                 <label style={{display:'block',fontSize:13,fontWeight:600,marginBottom:8,color:'#555'}}>色号系统</label>
-                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                  {['MARD','COCO','漫漫','盼盼','咪小窝'].map(o=>(
-                    <button key={o} onClick={()=>setSettings(s=>({...s,palette:o}))} style={{
-                      background:settings.palette===o?T.accentRed:'#f2f1ee',
-                      color:settings.palette===o?'#fff':'#555',
-                      border:'none',borderRadius:8,padding:'7px 14px',fontSize:13,cursor:'pointer',fontFamily:'Space Mono,monospace',fontWeight:600,transition:'all 0.15s'
-                    }}>{o}</button>
-                  ))}
+                <div style={{display:'inline-flex',alignItems:'center',background:T.accentRed,color:'#fff',borderRadius:8,padding:'7px 14px',fontSize:13,fontFamily:'Space Mono,monospace',fontWeight:600}}>
+                  MARD 221
                 </div>
-                <div style={{fontSize:11,color:'#bbb',marginTop:6}}>Generated colors will be snapped to this 色号系统 before preview and publish.</div>
+                <div style={{fontSize:11,color:'#bbb',marginTop:6}}>Generated colors will be snapped to the MARD 221-color palette before preview and publish.</div>
               </div>
 
               {!isGridImage && (
@@ -907,6 +1069,15 @@ function AdminPage({ onPatternPublished }) {
                 </div>
               )}
 
+              {editorStatus && (
+                <div style={{
+                  background:'#f8f7f4',border:'1px solid #e8e6e1',borderRadius:8,
+                  padding:'9px 12px',marginBottom:20,color:'#666',fontSize:12,fontWeight:600
+                }}>
+                  {editorStatus}
+                </div>
+              )}
+
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:20}}>
                 <div style={{background:`${T.accentRed}08`,borderRadius:8,padding:'12px 14px'}}>
                   <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:4}}>Grid</div>
@@ -945,7 +1116,14 @@ function AdminPage({ onPatternPublished }) {
               </div>
 
               <div style={{display:'flex',gap:10}}>
-                <button onClick={()=>{setStep('upload');setUploaded(null);setProcessingResult(null);setAiEnhancingSize(null);}} style={{flex:1,background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Upload Another</button>
+                <button onClick={()=>{setStep('upload');setUploaded(null);setProcessingResult(null);setAiEnhancingSize(null);resetFileInput();setEditorStatus('');localStorage.removeItem('pixelcraft_admin_draft');localStorage.removeItem('pixelcraft_editor_payload');localStorage.removeItem('pixelcraft_editor_result');}} style={{flex:1,background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Upload Another</button>
+                <button onClick={handleEditGrid} disabled={!activeResult || isActiveAiEnhancing} style={{
+                  flex:1,background:(!activeResult||isActiveAiEnhancing)?'#e8e6e1':'#fff',
+                  color:(!activeResult||isActiveAiEnhancing)?'#aaa':T.accentRed,
+                  border:`1px solid ${(!activeResult||isActiveAiEnhancing)?'#e8e6e1':T.accentRed}`,
+                  borderRadius:8,padding:'11px 0',fontWeight:700,fontSize:13,
+                  cursor:(!activeResult||isActiveAiEnhancing)?'default':'pointer',fontFamily:'inherit',transition:'all 0.2s'
+                }}>Edit Grid</button>
                 <button onClick={handlePublish} disabled={publishing||isActiveAiEnhancing||!publishTitle.trim()} style={{
                   flex:2,background:(publishing||isActiveAiEnhancing||!publishTitle.trim())?'#e8e6e1':`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
                   color:(publishing||isActiveAiEnhancing||!publishTitle.trim())?'#aaa':'#fff',
@@ -1140,6 +1318,9 @@ function App() {
   }, []);
 
   useEffect(() => { loadPatterns(); }, [loadPatterns]);
+  useEffect(() => {
+    if (!authLoading && page === 'admin' && !user?.is_admin) setPage('gallery');
+  }, [authLoading, page, user?.is_admin]);
   useEffect(() => { localStorage.setItem('pc_page', page); }, [page]);
 
   const onFave = async (id) => {

@@ -7,6 +7,7 @@ interface PixelatedPreviewCanvasProps {
   mappedPixelData: MappedPixel[][] | null;
   gridDimensions: { N: number; M: number } | null;
   isManualColoringMode: boolean;
+  fitToViewport?: boolean;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   onInteraction: (
     clientX: number,
@@ -100,6 +101,7 @@ const PixelatedPreviewCanvas: React.FC<PixelatedPreviewCanvasProps> = ({
   mappedPixelData,
   gridDimensions,
   isManualColoringMode,
+  fitToViewport = false,
   canvasRef,
   onInteraction,
   highlightColorKey,
@@ -109,6 +111,7 @@ const PixelatedPreviewCanvas: React.FC<PixelatedPreviewCanvasProps> = ({
   const touchStartPosRef = useRef<{ x: number; y: number; pageX: number; pageY: number } | null>(null);
   const touchMovedRef = useRef<boolean>(false);
   const [isHighlighting, setIsHighlighting] = useState(false);
+  const [canvasSizeToken, setCanvasSizeToken] = useState(0);
 
   // Effect to detect dark mode changes and update state
   useEffect(() => {
@@ -134,6 +137,36 @@ const PixelatedPreviewCanvas: React.FC<PixelatedPreviewCanvasProps> = ({
 
   }, [darkModeState]); // Depend on darkModeState to re-run if needed externally
 
+  useEffect(() => {
+    if (!fitToViewport || !gridDimensions || !canvasRef.current) return;
+
+    const resizeCanvas = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const reservedX = window.innerWidth < 640 ? 24 : 80;
+      const reservedY = window.innerWidth < 640 ? 96 : 88;
+      const availableWidth = Math.max(280, window.innerWidth - reservedX);
+      const availableHeight = Math.max(280, window.innerHeight - reservedY);
+      const cellSize = Math.max(
+        4,
+        Math.floor(Math.min(availableWidth / gridDimensions.N, availableHeight / gridDimensions.M))
+      );
+      const nextWidth = Math.max(gridDimensions.N * cellSize, gridDimensions.N);
+      const nextHeight = Math.max(gridDimensions.M * cellSize, gridDimensions.M);
+
+      if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+        setCanvasSizeToken(token => token + 1);
+      }
+    };
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    return () => window.removeEventListener('resize', resizeCanvas);
+  }, [fitToViewport, gridDimensions, canvasRef]);
+
   // Update useEffect for drawing to depend on darkModeState as well
   useEffect(() => {
     // Ensure darkModeState is not null before drawing
@@ -141,7 +174,7 @@ const PixelatedPreviewCanvas: React.FC<PixelatedPreviewCanvasProps> = ({
       console.log(`Redrawing canvas, dark mode: ${darkModeState}`); // Log redraw trigger
       drawPixelatedCanvas(mappedPixelData, canvasRef.current, gridDimensions, highlightColorKey, isHighlighting);
     }
-  }, [mappedPixelData, gridDimensions, canvasRef, darkModeState, highlightColorKey, isHighlighting]); // Add darkModeState dependency
+  }, [mappedPixelData, gridDimensions, canvasRef, darkModeState, highlightColorKey, isHighlighting, canvasSizeToken]); // Add darkModeState dependency
 
   // 处理高亮效果
   useEffect(() => {
@@ -246,7 +279,9 @@ const PixelatedPreviewCanvas: React.FC<PixelatedPreviewCanvasProps> = ({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd} // 添加 onTouchCancel 以处理触摸中断的情况
-      className={`border border-gray-300 dark:border-gray-600 max-w-full h-auto rounded block ${
+      className={`border border-gray-300 dark:border-gray-600 h-auto rounded block ${
+        fitToViewport ? 'max-w-none' : 'max-w-full'
+      } ${
         isManualColoringMode ? 'cursor-pointer' : 'cursor-grab' // 改为 grab 光标提示可以拖动
       }`}
       style={{
