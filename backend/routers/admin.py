@@ -2,11 +2,13 @@ import csv
 import io
 import json
 import os
+import re
 import tempfile
 from typing import Optional
 
 import cv2
 import numpy as np
+import pytesseract
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
@@ -14,7 +16,7 @@ import models
 import schemas
 from ai_enhancement import enhance_image_for_beads
 from auth import get_admin_user
-from color_systems import COLOR_SYSTEMS, apply_color_system_to_result
+from color_systems import COLOR_SYSTEMS, _load_mapping, apply_color_system_to_result
 from database import get_db
 from openai_grid import generate_openai_bead_grid
 
@@ -22,6 +24,9 @@ router = APIRouter()
 
 _PHOTO_SIZES = ["52x52", "78x78", "104x104"]
 _CSV_CONTENT_TYPES = {"text/csv", "application/csv", "application/vnd.ms-excel", "text/plain"}
+_READY_GRID_IMPORT_MODE = "ready_grid_codes"
+_READY_GRID_OCR_CONFIG = "--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+_CODE_TOKEN_RE = re.compile(r"[A-Z]+[0-9]+")
 
 
 def _validate_palette_name(palette_name: str) -> str:
@@ -45,6 +50,400 @@ def _decode_csv_upload(contents: bytes) -> str:
         return contents.decode("utf-8-sig")
     except UnicodeDecodeError:
         return contents.decode("latin-1")
+
+
+def _normalize_ready_grid_code(value: object) -> str:
+    raw = str(value or "").strip().upper()
+    if not raw:
+        return ""
+    compact = re.sub(r"[^A-Z0-9]", "", raw)
+    if not compact or compact.isdigit():
+        return ""
+    known_codes = _known_mard_codes()
+    candidates: list[str] = []
+
+    for match in _CODE_TOKEN_RE.finditer(compact):
+        candidates.append(match.group(0))
+
+    if compact[0].isalpha() and len(compact) >= 2:
+        digit_map = str.maketrans({
+            "O": "0",
+            "D": "0",
+            "Q": "0",
+            "I": "1",
+            "L": "1",
+            "T": "1",
+            "Z": "2",
+            "S": "5",
+            "B": "8",
+        })
+        corrected_tail = compact[1:].translate(digit_map)
+        corrected_digits = re.sub(r"[^0-9]", "", corrected_tail)
+        for length in range(1, min(3, len(corrected_digits)) + 1):
+            candidates.append(f"{compact[0]}{corrected_digits[:length]}")
+
+    for candidate in candidates:
+        if candidate in known_codes:
+            return candidate
+    return ""
+
+
+def _looks_like_numbered_header_row(row: list[str]) -> bool:
+    non_empty = [str(value or "").strip() for value in row if str(value or "").strip()]
+    if not non_empty:
+        return False
+    numeric_count = sum(1 for value in non_empty if value.isdigit())
+    code_count = sum(1 for value in non_empty if _CODE_TOKEN_RE.search(value))
+    return numeric_count >= 2 and code_count == 0 and numeric_count / len(non_empty) >= 0.55
+
+
+def _looks_like_numbered_header_column(rows: list[list[str]], index: int) -> bool:
+    values = []
+    for row in rows:
+        if index >= len(row):
+            continue
+        value = str(row[index] or "").strip()
+        if value:
+            values.append(value)
+    if not values:
+        return False
+    numeric_count = sum(1 for value in values if value.isdigit())
+    code_count = sum(1 for value in values if _CODE_TOKEN_RE.search(value))
+    return numeric_count >= 2 and code_count == 0 and numeric_count / len(values) >= 0.55
+
+
+def _trim_numbered_header_grid_and_colors(
+    raw_grid: list[list[str]],
+    color_grid: Optional[list[list[str]]] = None,
+) -> tuple[list[list[str]], Optional[list[list[str]]]]:
+    rows = [[str(cell or "").strip() for cell in row] for row in raw_grid if row]
+    if not rows:
+        return [], [] if color_grid is not None else None
+
+    width = max(len(row) for row in rows)
+    rows = [row + [""] * (width - len(row)) for row in rows]
+    colors = None
+    if color_grid is not None:
+        colors = []
+        for idx in range(len(rows)):
+            color_row = color_grid[idx] if idx < len(color_grid) else []
+            colors.append([_normalize_hex(cell) for cell in color_row] + ["#FFFFFF"] * (width - len(color_row)))
+
+    while rows and _looks_like_numbered_header_row(rows[0]):
+        rows = rows[1:]
+        if colors is not None:
+            colors = colors[1:]
+    while rows and _looks_like_numbered_header_row(rows[-1]):
+        rows = rows[:-1]
+        if colors is not None:
+            colors = colors[:-1]
+    if not rows:
+        return [], [] if color_grid is not None else None
+
+    while rows and _looks_like_numbered_header_column(rows, 0):
+        rows = [row[1:] for row in rows]
+        if colors is not None:
+            colors = [row[1:] for row in colors]
+    while rows and rows[0] and _looks_like_numbered_header_column(rows, len(rows[0]) - 1):
+        rows = [row[:-1] for row in rows]
+        if colors is not None:
+            colors = [row[:-1] for row in colors]
+
+    return [[_normalize_ready_grid_code(cell) for cell in row] for row in rows], colors
+
+
+def _trim_numbered_header_grid(raw_grid: list[list[str]]) -> list[list[str]]:
+    rows, _ = _trim_numbered_header_grid_and_colors(raw_grid)
+    return rows
+
+
+def _normalize_hex(hex_value: object, fallback: str = "#FFFFFF") -> str:
+    raw = str(hex_value or "").strip().upper()
+    if raw and not raw.startswith("#"):
+        raw = f"#{raw}"
+    if len(raw) == 7:
+        try:
+            int(raw[1:], 16)
+            return raw
+        except ValueError:
+            pass
+    return fallback
+
+
+def _known_mard_codes() -> set[str]:
+    return {str(codes.get("MARD") or "").upper() for codes in _load_mapping().values() if codes.get("MARD")}
+
+
+def _mard_hex_for_code(code: str, fallback: str) -> str:
+    normalized = str(code or "").strip().upper()
+    for hex_value, codes in _load_mapping().items():
+        if str(codes.get("MARD") or "").upper() == normalized:
+            return _normalize_hex(hex_value, fallback)
+    return _normalize_hex(fallback)
+
+
+def _hex_to_rgb_tuple(hex_value: str) -> tuple[int, int, int]:
+    normalized = _normalize_hex(hex_value)
+    return (
+        int(normalized[1:3], 16),
+        int(normalized[3:5], 16),
+        int(normalized[5:7], 16),
+    )
+
+
+def _color_distance_sq(a: str, b: str) -> int:
+    ar, ag, ab = _hex_to_rgb_tuple(a)
+    br, bg, bb = _hex_to_rgb_tuple(b)
+    return (ar - br) ** 2 + (ag - bg) ** 2 + (ab - bb) ** 2
+
+
+def _is_empty_ready_grid_color(hex_value: str) -> bool:
+    r, g, b = _hex_to_rgb_tuple(hex_value)
+    return min(r, g, b) >= 248 and max(r, g, b) - min(r, g, b) <= 8
+
+
+def _recover_ready_grid_symbols(
+    code_grid: list[list[str]],
+    color_grid: Optional[list[list[str]]],
+) -> list[list[str]]:
+    normalized = [[_normalize_ready_grid_code(cell) for cell in row] for row in code_grid]
+    if not color_grid:
+        return normalized
+
+    for row_idx, row in enumerate(normalized):
+        for col_idx, symbol in enumerate(row):
+            if not symbol or row_idx >= len(color_grid) or col_idx >= len(color_grid[row_idx]):
+                continue
+            sampled_hex = _normalize_hex(color_grid[row_idx][col_idx])
+            expected_hex = _mard_hex_for_code(symbol, sampled_hex)
+            if _color_distance_sq(sampled_hex, expected_hex) > 5200:
+                normalized[row_idx][col_idx] = ""
+
+    symbol_colors: dict[str, list[str]] = {}
+    for row_idx, row in enumerate(normalized):
+        for col_idx, symbol in enumerate(row):
+            if not symbol or row_idx >= len(color_grid) or col_idx >= len(color_grid[row_idx]):
+                continue
+            symbol_colors.setdefault(symbol, []).append(_normalize_hex(color_grid[row_idx][col_idx]))
+
+    reference_colors = {
+        symbol: max(set(colors), key=colors.count)
+        for symbol, colors in symbol_colors.items()
+        if colors
+    }
+    recovered: list[list[str]] = []
+    for row_idx, row in enumerate(normalized):
+        recovered_row: list[str] = []
+        for col_idx, symbol in enumerate(row):
+            if symbol:
+                recovered_row.append(symbol)
+                continue
+
+            sampled_hex = "#FFFFFF"
+            if row_idx < len(color_grid) and col_idx < len(color_grid[row_idx]):
+                sampled_hex = _normalize_hex(color_grid[row_idx][col_idx])
+            if _is_empty_ready_grid_color(sampled_hex):
+                recovered_row.append("")
+                continue
+
+            nearest_symbol = ""
+            nearest_distance = float("inf")
+            for candidate_symbol, candidate_hex in reference_colors.items():
+                distance = _color_distance_sq(sampled_hex, candidate_hex)
+                if distance < nearest_distance:
+                    nearest_symbol = candidate_symbol
+                    nearest_distance = distance
+            if nearest_symbol and nearest_distance <= 1800:
+                recovered_row.append(nearest_symbol)
+                continue
+
+            recovered_row.append("")
+        recovered.append(recovered_row)
+    return recovered
+
+
+def _code_grid_to_processing_result(
+    code_grid: list[list[str]],
+    color_grid: Optional[list[list[str]]] = None,
+    *,
+    source_name: str,
+) -> dict:
+    if not code_grid:
+        raise ValueError("No bead codes found in the grid image")
+
+    code_grid = _recover_ready_grid_symbols(code_grid, color_grid)
+    cols = max(len(row) for row in code_grid)
+    rows = len(code_grid)
+    cells = []
+    legend = []
+    seen_symbols: set[str] = set()
+
+    for row_idx, row in enumerate(code_grid, start=1):
+        for col_idx in range(1, cols + 1):
+            symbol = _normalize_ready_grid_code(row[col_idx - 1] if col_idx - 1 < len(row) else "")
+            sampled_hex = "#FFFFFF"
+            if color_grid and row_idx - 1 < len(color_grid) and col_idx - 1 < len(color_grid[row_idx - 1]):
+                sampled_hex = _normalize_hex(color_grid[row_idx - 1][col_idx - 1])
+
+            if not symbol:
+                cells.append({
+                    "row": row_idx,
+                    "col": col_idx,
+                    "symbol": "",
+                    "color_hex": "#FFFFFF",
+                    "empty": True,
+                    "confidence": 1.0,
+                    "needs_review": False,
+                })
+                continue
+
+            color_hex = _mard_hex_for_code(symbol, sampled_hex)
+            if symbol not in seen_symbols:
+                legend.append({
+                    "symbol": symbol,
+                    "color_hex": color_hex,
+                    "confidence": 1.0,
+                    "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0},
+                })
+                seen_symbols.add(symbol)
+
+            cells.append({
+                "row": row_idx,
+                "col": col_idx,
+                "symbol": symbol,
+                "color_hex": color_hex,
+                "empty": False,
+                "confidence": 1.0,
+                "needs_review": False,
+            })
+
+    return {
+        "rows": rows,
+        "cols": cols,
+        "cells": cells,
+        "legend": legend,
+        "artifacts": {"source": "ready_grid_image_import"},
+        "image": {"source_name": source_name or "ready-grid.png"},
+    }
+
+
+def _line_centers_from_projection(projection: np.ndarray, min_strength: float) -> list[int]:
+    if projection.size == 0:
+        return []
+    threshold = max(min_strength, float(projection.max()) * 0.25)
+    indices = np.where(projection >= threshold)[0]
+    if len(indices) == 0:
+        return []
+
+    centers: list[int] = []
+    start = int(indices[0])
+    previous = int(indices[0])
+    for index in indices[1:]:
+        index = int(index)
+        if index - previous > 3:
+            centers.append(int(round((start + previous) / 2)))
+            start = index
+        previous = index
+    centers.append(int(round((start + previous) / 2)))
+    return centers
+
+
+def _trim_irregular_line_centers(centers: list[int]) -> list[int]:
+    if len(centers) < 4:
+        return centers
+    diffs = np.diff(centers)
+    regular_diffs = [int(d) for d in diffs if d > 12]
+    if not regular_diffs:
+        return centers
+    period = float(np.median(regular_diffs))
+    runs: list[list[int]] = []
+    current = [centers[0]]
+    for next_center, diff in zip(centers[1:], diffs):
+        if period * 0.55 <= diff <= period * 1.45:
+            current.append(next_center)
+        else:
+            if len(current) >= 4:
+                runs.append(current)
+            current = [next_center]
+    if len(current) >= 4:
+        runs.append(current)
+    return max(runs, key=len) if runs else centers
+
+
+def _detect_ready_grid_lines(image: np.ndarray) -> tuple[list[int], list[int]]:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    binary = cv2.adaptiveThreshold(
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_MEAN_C,
+        cv2.THRESH_BINARY_INV,
+        51,
+        15,
+    )
+    h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(25, image.shape[1] // 70), 1))
+    v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(25, image.shape[0] // 100)))
+    h_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, h_kernel)
+    v_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, v_kernel)
+
+    x_lines = _line_centers_from_projection(v_lines.sum(axis=0) / 255.0, max(12, image.shape[0] * 0.15))
+    y_lines = _line_centers_from_projection(h_lines.sum(axis=1) / 255.0, max(12, image.shape[1] * 0.15))
+    x_lines = _trim_irregular_line_centers(x_lines)
+    y_lines = _trim_irregular_line_centers(y_lines)
+    if len(x_lines) < 3 or len(y_lines) < 3:
+        raise ValueError("Unable to detect numbered grid lines")
+    return x_lines, y_lines
+
+
+def _cell_fill_hex(cell: np.ndarray) -> str:
+    if cell.size == 0:
+        return "#FFFFFF"
+    h, w = cell.shape[:2]
+    pad_y = max(1, int(h * 0.18))
+    pad_x = max(1, int(w * 0.18))
+    inner = cell[pad_y:max(pad_y + 1, h - pad_y), pad_x:max(pad_x + 1, w - pad_x)]
+    if inner.size == 0:
+        inner = cell
+    rgb = cv2.cvtColor(inner, cv2.COLOR_BGR2RGB).reshape(-1, 3)
+    median = np.median(rgb, axis=0).astype(int)
+    return "#{:02X}{:02X}{:02X}".format(int(median[0]), int(median[1]), int(median[2]))
+
+
+def _ocr_ready_grid_cell(cell: np.ndarray) -> str:
+    if cell.size == 0:
+        return ""
+    gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
+    gray = cv2.resize(gray, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    text = pytesseract.image_to_string(gray, config=_READY_GRID_OCR_CONFIG)
+    return re.sub(r"[^A-Z0-9]", "", str(text or "").upper())
+
+
+def _extract_ready_grid_image_result(img_path: str) -> dict:
+    image = cv2.imread(img_path)
+    if image is None:
+        raise ValueError(f"Cannot read image: {img_path}")
+
+    x_lines, y_lines = _detect_ready_grid_lines(image)
+    raw_codes: list[list[str]] = []
+    raw_colors: list[list[str]] = []
+
+    for y1, y2 in zip(y_lines, y_lines[1:]):
+        code_row: list[str] = []
+        color_row: list[str] = []
+        for x1, x2 in zip(x_lines, x_lines[1:]):
+            cell = image[y1 + 2:y2 - 2, x1 + 2:x2 - 2]
+            code_row.append(_ocr_ready_grid_cell(cell))
+            color_row.append(_cell_fill_hex(cell))
+        raw_codes.append(code_row)
+        raw_colors.append(color_row)
+
+    trimmed_codes, color_rows = _trim_numbered_header_grid_and_colors(raw_codes, raw_colors)
+
+    return _code_grid_to_processing_result(
+        trimmed_codes,
+        color_rows,
+        source_name=os.path.basename(img_path),
+    )
 
 
 def _csv_to_processing_result(contents: bytes, source_name: str) -> dict:
@@ -303,9 +702,11 @@ async def upload_and_process(
     palette_name: str = Form("MARD"),
     quality: int = Form(85),
     is_grid_image: str = Form("false"),
+    import_mode: str = Form("auto"),
     current_user: models.User = Depends(get_admin_user),
 ):
     use_ocr = is_grid_image.lower() in ("true", "1", "yes")
+    ready_grid_import = import_mode == _READY_GRID_IMPORT_MODE
     selected_palette = _validate_palette_name(palette_name)
     is_csv = _is_csv_upload(file)
     if not is_csv and (not file.content_type or not file.content_type.startswith("image/")):
@@ -327,6 +728,10 @@ async def upload_and_process(
             f.write(contents)
 
         try:
+            if ready_grid_import:
+                result = _extract_ready_grid_image_result(img_path)
+                result["palette_name"] = selected_palette
+                return result
             if use_ocr:
                 from grid_recovery import generate_web_result  # noqa: PLC0415
                 result = generate_web_result(img_path, workdir)

@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Paste this whole file into the Amazon Lightsail "Launch script" box.
 # Replace REPO_URL with your Git repository URL before launching.
-REPO_URL="${REPO_URL:-}"
+REPO_URL="${REPO_URL:-https://github.com/wingchee/funlab.git}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
 APP_DIR="${APP_DIR:-/opt/pixelcraft}"
 PORT="${PORT:-80}"

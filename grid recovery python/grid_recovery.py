@@ -20,6 +20,7 @@ TOKEN_RE = re.compile(r"[A-Z0-9]{1,3}")
 OCR_CONFIG = "--psm 8 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 LEGEND_OCR_CONFIG = "--psm 6 -c tessedit_char_whitelist=0123456789"
 FOOTER_LABEL_OCR_CONFIG = "--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+NUMERIC_OCR_CONFIG = "--psm 6 -c tessedit_char_whitelist=0123456789"
 FOOTER_SLOT_DIGIT_MAP = str.maketrans(
     {
         "O": "0",
@@ -44,6 +45,14 @@ class GridLayout:
     cols: int
     x_lines: List[int]
     y_lines: List[int]
+
+
+@dataclass(frozen=True)
+class BorderLabelCounts:
+    rows: int | None = None
+    cols: int | None = None
+    first_row_center_y: float | None = None
+    last_row_center_y: float | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +87,44 @@ def build_legend_table(entries: list[LegendEntry]) -> dict[str, LegendEntry]:
         if existing is None or entry.confidence > existing.confidence:
             legend[entry.symbol] = entry
     return legend
+
+
+def _derive_legend_entries_from_clusters(cells: list[CellRecord]) -> list[LegendEntry]:
+    grouped: dict[int, list[CellRecord]] = defaultdict(list)
+    for cell in cells:
+        if cell.is_empty or cell.cluster_id < 0:
+            continue
+        grouped[cell.cluster_id].append(cell)
+
+    entries: list[LegendEntry] = []
+    for cluster_id in sorted(grouped):
+        cluster_cells = grouped[cluster_id]
+        samples = np.array([cell.color_bgr for cell in cluster_cells], dtype=np.float32)
+        color_bgr = _median_color(samples)
+        entries.append(
+            LegendEntry(
+                symbol=f"C{cluster_id:02d}",
+                color_bgr=color_bgr,
+                bbox=(0, 0, 0, 0),
+                confidence=0.25,
+            )
+        )
+    return entries
+
+
+def _choose_legend_entries(
+    extracted_entries: list[LegendEntry],
+    cluster_entries: list[LegendEntry],
+) -> list[LegendEntry]:
+    if not extracted_entries:
+        return cluster_entries
+    if (
+        cluster_entries
+        and len(extracted_entries) < min(6, len(cluster_entries))
+        and max(entry.confidence for entry in extracted_entries) <= 0.25
+    ):
+        return cluster_entries
+    return extracted_entries
 
 
 def _group_indices(indices: np.ndarray) -> List[int]:
@@ -160,6 +207,188 @@ def _trim_trailing_irregular_lines(lines: List[int], cell_size: int) -> List[int
     return lines
 
 
+def _ocr_numeric_tokens(patch: np.ndarray, *, scale: int = 6) -> list[tuple[int, float, float, float, float, float]]:
+    if patch.size == 0:
+        return []
+
+    enlarged = cv2.resize(patch, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    gray = cv2.cvtColor(enlarged, cv2.COLOR_BGR2GRAY)
+    threshold = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+    data = pytesseract.image_to_data(
+        threshold,
+        config=NUMERIC_OCR_CONFIG,
+        output_type=pytesseract.Output.DICT,
+    )
+
+    tokens: list[tuple[int, float, float, float, float, float]] = []
+    for text, confidence, left, top, width, height in zip(
+        data["text"],
+        data["conf"],
+        data["left"],
+        data["top"],
+        data["width"],
+        data["height"],
+    ):
+        raw = text.strip()
+        if re.fullmatch(r"\d{1,3}", raw) is None:
+            continue
+        try:
+            score = float(confidence)
+        except ValueError:
+            score = -1.0
+        tokens.append(
+            (
+                int(raw),
+                score,
+                left / scale,
+                top / scale,
+                width / scale,
+                height / scale,
+            )
+        )
+    return tokens
+
+
+def _detect_border_label_counts(image: np.ndarray, layout: GridLayout) -> BorderLabelCounts:
+    side_width = max(32, int(round(layout.cell_size * 2.0)))
+    y1 = max(0, layout.top + layout.y_lines[0] - layout.cell_size * 2)
+    y2 = min(image.shape[0], layout.top + layout.y_lines[-1] + layout.cell_size * 2)
+    if y2 <= y1:
+        return BorderLabelCounts()
+
+    left_tokens = _ocr_numeric_tokens(image[y1:y2, :side_width])
+    right_x1 = max(0, image.shape[1] - side_width)
+    right_tokens = _ocr_numeric_tokens(image[y1:y2, right_x1:])
+
+    row_candidates: list[int] = []
+    row_centers: dict[int, list[float]] = defaultdict(list)
+    min_row = max(2, int(round(layout.rows * 0.5)))
+    max_row = max(layout.rows + 2, min_row)
+
+    for value, confidence, x, y, width, height in left_tokens:
+        if confidence < 40 or x > side_width * 0.6:
+            continue
+        if 1 <= value <= max_row:
+            row_centers[value].append(y1 + y + height / 2.0)
+        if min_row <= value <= max_row:
+            row_candidates.append(value)
+
+    for value, confidence, x, y, width, height in right_tokens:
+        if confidence < 40 or x < side_width * 0.4:
+            continue
+        if 1 <= value <= max_row:
+            row_centers[value].append(y1 + y + height / 2.0)
+        if min_row <= value <= max_row:
+            row_candidates.append(value)
+
+    col_candidates: list[int] = []
+    min_col = max(2, layout.cols - 3)
+    max_col = layout.cols + 3
+    for value, confidence, x, _, _, _ in right_tokens:
+        if confidence < 40 or x > side_width * 0.4:
+            continue
+        if min_col <= value <= max_col:
+            col_candidates.append(value)
+
+    rows = max(row_candidates) if row_candidates else None
+    first_center = None
+    last_center = None
+    if rows is not None:
+        if row_centers.get(1):
+            first_center = float(np.median(row_centers[1]))
+        if row_centers.get(rows):
+            last_center = float(np.median(row_centers[rows]))
+
+    return BorderLabelCounts(
+        rows=rows,
+        cols=max(col_candidates) if col_candidates else None,
+        first_row_center_y=first_center,
+        last_row_center_y=last_center,
+    )
+
+
+def _normalize_line_count(
+    lines: list[int],
+    *,
+    target_cells: int,
+    cell_size: int,
+    leading_missing: bool = False,
+    lower_bound: int = 0,
+    upper_bound: int | None = None,
+) -> list[int]:
+    adjusted = list(lines)
+    target_len = target_cells + 1
+    if target_len < 2:
+        return adjusted
+
+    if leading_missing and adjusted:
+        candidate = adjusted[0] - cell_size
+        if candidate >= lower_bound and (not adjusted or adjusted[0] - candidate >= cell_size * 0.6):
+            adjusted.insert(0, int(round(candidate)))
+
+    while len(adjusted) < target_len and adjusted:
+        prepend = adjusted[0] - cell_size
+        append = adjusted[-1] + cell_size
+        can_prepend = prepend >= lower_bound and adjusted[0] > cell_size * 1.2
+        can_append = upper_bound is None or upper_bound - adjusted[-1] > cell_size * 1.2
+        if can_prepend:
+            adjusted.insert(0, int(round(prepend)))
+        elif can_append:
+            adjusted.append(int(round(append)))
+        else:
+            break
+
+    if len(adjusted) > target_len:
+        adjusted = adjusted[:target_len]
+    return adjusted
+
+
+def _apply_border_label_counts(layout: GridLayout, counts: BorderLabelCounts) -> GridLayout:
+    target_cols = counts.cols or layout.cols
+    target_rows = counts.rows or layout.rows
+
+    first_y_abs = layout.top + layout.y_lines[0]
+    leading_row_missing = (
+        counts.first_row_center_y is not None
+        and counts.first_row_center_y < first_y_abs
+    )
+
+    x_lines = _normalize_line_count(
+        layout.x_lines,
+        target_cells=target_cols,
+        cell_size=layout.cell_size,
+        lower_bound=0,
+        upper_bound=layout.width,
+    )
+    y_lines = _normalize_line_count(
+        layout.y_lines,
+        target_cells=target_rows,
+        cell_size=layout.cell_size,
+        leading_missing=leading_row_missing,
+        lower_bound=0,
+        upper_bound=layout.height,
+    )
+
+    return GridLayout(
+        left=layout.left,
+        top=layout.top,
+        width=layout.width,
+        height=layout.height,
+        cell_size=layout.cell_size,
+        rows=max(0, len(y_lines) - 1),
+        cols=max(0, len(x_lines) - 1),
+        x_lines=x_lines,
+        y_lines=y_lines,
+    )
+
+
+def _correct_layout_from_border_labels(image: np.ndarray, layout: GridLayout) -> GridLayout:
+    counts = _detect_border_label_counts(image, layout)
+    if counts.rows is None and counts.cols is None:
+        return layout
+    return _apply_border_label_counts(layout, counts)
+
+
 def detect_grid_layout(image: np.ndarray) -> GridLayout:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     binary = cv2.adaptiveThreshold(
@@ -207,7 +436,7 @@ def detect_grid_layout(image: np.ndarray) -> GridLayout:
 
     cols = max(0, len(x_lines) - 1)
     rows = max(0, len(y_lines) - 1)
-    return GridLayout(
+    layout = GridLayout(
         left=left,
         top=top,
         width=right - left + 1,
@@ -218,6 +447,7 @@ def detect_grid_layout(image: np.ndarray) -> GridLayout:
         x_lines=x_lines,
         y_lines=y_lines,
     )
+    return _correct_layout_from_border_labels(image, layout)
 
 
 def detect_legend_band(image: np.ndarray, layout: GridLayout) -> np.ndarray:
@@ -825,8 +1055,9 @@ def _cluster_cells(cells: List[CellRecord], max_k: int = 14) -> None:
     k = max(2, min(max_k, unique_count))
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 25, 0.2)
     _, labels, centers = cv2.kmeans(samples, k, None, criteria, 5, cv2.KMEANS_PP_CENTERS)
-    for cell, label, center in zip(colored, labels.flatten(), centers):
+    for cell, label in zip(colored, labels.flatten()):
         cell.cluster_id = int(label)
+        center = centers[cell.cluster_id]
         cell.color_bgr = tuple(int(round(channel)) for channel in center)
         cell.color_hex = "#{:02X}{:02X}{:02X}".format(cell.color_bgr[2], cell.color_bgr[1], cell.color_bgr[0])
 
@@ -1209,11 +1440,15 @@ def generate_reference_outputs(image_path: Path | str, output_root: Path | str) 
         raise FileNotFoundError(image_path)
 
     layout = detect_grid_layout(image)
-    legend_entries = extract_legend_entries(image, layout)
-    legend_table = build_legend_table(legend_entries)
     base_cells = _extract_cells(image, layout)
     _cluster_cells(base_cells)
     _seed_ocr_for_clusters(image, layout, base_cells)
+    cluster_legend_entries = _derive_legend_entries_from_clusters(base_cells)
+    legend_entries = _choose_legend_entries(
+        extract_legend_entries(image, layout),
+        cluster_legend_entries,
+    )
+    legend_table = build_legend_table(legend_entries)
 
     outputs: Dict[str, Dict[str, Path]] = {}
     variants = {

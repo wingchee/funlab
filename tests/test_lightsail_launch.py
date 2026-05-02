@@ -38,11 +38,20 @@ def test_lightsail_launch_script_supports_first_boot_deploy():
     assert "http://127.0.0.1" in script
 
 
+def test_lightsail_launch_script_does_not_embed_api_secrets():
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert "sk-" not in script
+    assert 'OPENAI_API_KEY="${OPENAI_API_KEY:-}"' in script
+
+
 def test_lightsail_launch_guide_documents_required_placeholders():
     guide = GUIDE.read_text(encoding="utf-8")
 
     assert "Launch script" in guide
     assert "REPO_URL=" in guide
     assert "Networking" in guide
+    assert "/var/log/cloud-init-output.log" in guide
+    assert "No pixelcraft log file" in guide
     assert "80" in guide
     assert "22" in guide
