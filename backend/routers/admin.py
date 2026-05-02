@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import os
 import tempfile
@@ -19,6 +21,7 @@ from openai_grid import generate_openai_bead_grid
 router = APIRouter()
 
 _PHOTO_SIZES = ["52x52", "78x78", "104x104"]
+_CSV_CONTENT_TYPES = {"text/csv", "application/csv", "application/vnd.ms-excel", "text/plain"}
 
 
 def _validate_palette_name(palette_name: str) -> str:
@@ -29,6 +32,89 @@ def _validate_palette_name(palette_name: str) -> str:
 
 def _is_ai_image_edit_rejected(ai_enhancement: dict) -> bool:
     return ai_enhancement.get("error_type") == "safety_blocked"
+
+
+def _is_csv_upload(file: UploadFile) -> bool:
+    filename = (file.filename or "").lower()
+    content_type = (file.content_type or "").lower().split(";", 1)[0].strip()
+    return filename.endswith(".csv") or content_type in _CSV_CONTENT_TYPES
+
+
+def _decode_csv_upload(contents: bytes) -> str:
+    try:
+        return contents.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return contents.decode("latin-1")
+
+
+def _csv_to_processing_result(contents: bytes, source_name: str) -> dict:
+    text = _decode_csv_upload(contents)
+    rows = [row for row in csv.reader(io.StringIO(text)) if row]
+    if not rows:
+        raise ValueError("CSV file is empty")
+
+    cols = len(rows[0])
+    if cols == 0:
+        raise ValueError("CSV file has no columns")
+
+    cells = []
+    legend = []
+    symbol_by_hex: dict[str, str] = {}
+
+    for row_idx, row in enumerate(rows, start=1):
+        if len(row) != cols:
+            raise ValueError(f"Row {row_idx} has {len(row)} columns; expected {cols}")
+
+        for col_idx, raw_value in enumerate(row, start=1):
+            value = str(raw_value or "").strip()
+            empty = value == "" or value.upper() in {"TRANSPARENT", "EMPTY", "NONE", "NULL"}
+            if empty:
+                cells.append({
+                    "row": row_idx,
+                    "col": col_idx,
+                    "symbol": "",
+                    "color_hex": "#FFFFFF",
+                    "empty": True,
+                })
+                continue
+
+            color_hex = value.upper()
+            if not color_hex.startswith("#"):
+                color_hex = f"#{color_hex}"
+            if len(color_hex) != 7:
+                raise ValueError(f"Row {row_idx}, column {col_idx} has invalid color value: {value}")
+            try:
+                int(color_hex[1:], 16)
+            except ValueError as exc:
+                raise ValueError(f"Row {row_idx}, column {col_idx} has invalid color value: {value}") from exc
+
+            symbol = symbol_by_hex.get(color_hex)
+            if symbol is None:
+                symbol = f"C{len(symbol_by_hex) + 1}"
+                symbol_by_hex[color_hex] = symbol
+                legend.append({
+                    "symbol": symbol,
+                    "color_hex": color_hex,
+                    "confidence": 1.0,
+                    "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0},
+                })
+
+            cells.append({
+                "row": row_idx,
+                "col": col_idx,
+                "symbol": symbol,
+                "color_hex": color_hex,
+                "empty": False,
+            })
+
+    return {
+        "rows": len(rows),
+        "cols": cols,
+        "cells": cells,
+        "legend": legend,
+        "artifacts": {"source": "csv_import"},
+        "image": {"source_name": source_name or "pattern.csv"},
+    }
 
 
 def _make_background_mask(img: np.ndarray) -> np.ndarray:
@@ -219,12 +305,20 @@ async def upload_and_process(
     is_grid_image: str = Form("false"),
     current_user: models.User = Depends(get_admin_user),
 ):
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image (JPEG, PNG, WEBP)")
-
     use_ocr = is_grid_image.lower() in ("true", "1", "yes")
     selected_palette = _validate_palette_name(palette_name)
+    is_csv = _is_csv_upload(file)
+    if not is_csv and (not file.content_type or not file.content_type.startswith("image/")):
+        raise HTTPException(status_code=400, detail="File must be an image (JPEG, PNG, WEBP) or CSV bead pattern")
+
     contents = await file.read()
+    if is_csv:
+        try:
+            result = _csv_to_processing_result(contents, file.filename or "pattern.csv")
+            return apply_color_system_to_result(result, selected_palette)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"CSV import failed: {exc}") from exc
+
     suffix = os.path.splitext(file.filename or "image.jpg")[1] or ".jpg"
 
     with tempfile.TemporaryDirectory() as workdir:

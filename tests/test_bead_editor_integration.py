@@ -101,11 +101,13 @@ def test_admin_upload_input_can_reselect_same_image():
     html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
 
     assert "const resetFileInput = () =>" in html
-    assert "accept=\"image/png,image/jpeg,image/webp\"" in html
+    assert "accept=\"image/png,image/jpeg,image/webp,.csv,text/csv\"" in html
     assert "handleFileSelect(e.target.files?.[0]);" in html
     assert "e.target.value = '';" in html
     assert "resetFileInput(); fileInputRef.current?.click();" in html
     assert "Image must be 20 MB or smaller" in html
+    assert "CSV must be 5 MB or smaller" in html
+    assert "Import CSV Pattern" in html
 
 
 def test_editor_is_embeddable_under_bead_editor_base_path():

@@ -29,6 +29,35 @@ from routers.admin import publish_pattern  # noqa: E402
 
 
 class OpenAIGridTests(unittest.TestCase):
+    def test_csv_upload_is_normalized_to_processing_result(self):
+        class FakeUpload:
+            content_type = "text/csv"
+            filename = "bead-pattern-3x2-MARD_20260502-091813.csv"
+
+            async def read(self):
+                return b"#F47A8A,TRANSPARENT,#6BB5E8\n#6BB5E8,#F47A8A,"
+
+        result = asyncio.run(
+            admin_router.upload_and_process(
+                file=FakeUpload(),
+                palette_name="MARD",
+                quality=85,
+                is_grid_image="false",
+                current_user=models.User(is_admin=True),
+            )
+        )
+
+        self.assertEqual(result["rows"], 2)
+        self.assertEqual(result["cols"], 3)
+        self.assertEqual(result["image"], {"source_name": "bead-pattern-3x2-MARD_20260502-091813.csv"})
+        self.assertEqual(
+            [(cell["row"], cell["col"], cell["empty"]) for cell in result["cells"]],
+            [(1, 1, False), (1, 2, True), (1, 3, False), (2, 1, False), (2, 2, False), (2, 3, True)],
+        )
+        self.assertTrue(all(cell["symbol"] == "" for cell in result["cells"] if cell["empty"]))
+        self.assertGreaterEqual(len(result["legend"]), 2)
+        self.assertEqual(result["palette_name"], "MARD")
+
     def test_normalize_openai_grid_builds_processing_result(self):
         raw_grid = {
             "rows": 2,
