@@ -27,6 +27,10 @@ def _validate_palette_name(palette_name: str) -> str:
     return palette_name
 
 
+def _is_ai_image_edit_rejected(ai_enhancement: dict) -> bool:
+    return ai_enhancement.get("error_type") == "safety_blocked"
+
+
 def _make_background_mask(img: np.ndarray) -> np.ndarray:
     """Return a boolean mask (same H×W as img) that is True for background pixels.
 
@@ -279,6 +283,11 @@ async def enhance_preview(
 
         try:
             enhanced_path, ai_enhancement = enhance_image_for_beads(img_path, workdir)
+            if not ai_enhancement.get("used") and _is_ai_image_edit_rejected(ai_enhancement):
+                raise HTTPException(
+                    status_code=422,
+                    detail={"ai_enhancement": ai_enhancement},
+                )
             grid_source_path = enhanced_path if ai_enhancement.get("used") else img_path
             if ai_enhancement.get("used"):
                 try:

@@ -5,6 +5,7 @@ import types
 import unittest
 from pathlib import Path
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -119,7 +120,7 @@ class OpenAIGridTests(unittest.TestCase):
         finally:
             db.close()
 
-    def test_enhance_preview_uses_openai_grid_when_image_edit_is_rejected(self):
+    def test_enhance_preview_reports_rejected_image_edit_without_openai_grid_fallback(self):
         class FakeUpload:
             content_type = "image/png"
             filename = "source.png"
@@ -142,43 +143,25 @@ class OpenAIGridTests(unittest.TestCase):
                 },
             )
 
-            def fake_generate_grid(image_path, *, grid_size, quality, ai_metadata):
-                result = normalize_openai_grid(
-                    {
-                        "rows": 1,
-                        "cols": 2,
-                        "palette": [{"id": "A", "name": "Pink", "hex": "#F47A8A"}],
-                        "grid": [["A", ""]],
-                    },
-                    source_name="source.png",
-                    requested_size=grid_size,
-                    ai_metadata=ai_metadata,
-                )
-                result["ai_grid"] = {
-                    "attempted": True,
-                    "used": True,
-                    "provider": "openai",
-                    "requested_size": grid_size,
-                }
-                return result, result["ai_grid"]
+            def fake_generate_grid(*args, **kwargs):
+                raise AssertionError("OpenAI grid fallback should not run after an image-edit rejection")
 
             admin_router.generate_openai_bead_grid = fake_generate_grid
 
-            result = asyncio.run(
-                admin_router.enhance_preview(
-                    file=FakeUpload(),
-                    grid_size="52x52",
-                    palette_name="MARD",
-                    quality=85,
-                    current_user=models.User(is_admin=True),
+            with self.assertRaises(HTTPException) as ctx:
+                asyncio.run(
+                    admin_router.enhance_preview(
+                        file=FakeUpload(),
+                        grid_size="52x52",
+                        palette_name="MARD",
+                        quality=85,
+                        current_user=models.User(is_admin=True),
+                    )
                 )
-            )
 
-            self.assertEqual(result["rows"], 1)
-            self.assertEqual(result["cols"], 2)
-            self.assertEqual(result["cells"][0]["symbol"], "A19")
-            self.assertTrue(result["ai_grid"]["used"])
-            self.assertEqual(result["ai_enhancement"]["error_type"], "safety_blocked")
+            self.assertEqual(ctx.exception.status_code, 422)
+            self.assertEqual(ctx.exception.detail["ai_enhancement"]["error_type"], "safety_blocked")
+            self.assertNotIn("ai_grid", ctx.exception.detail)
         finally:
             admin_router.enhance_image_for_beads = original_enhance
             admin_router.generate_openai_bead_grid = original_generate_grid
@@ -338,6 +321,13 @@ class OpenAIGridTests(unittest.TestCase):
         self.assertIn("no shadows", BEAD_IMAGE_ENHANCEMENT_PROMPT)
         self.assertIn("original reference image", OPENAI_GRID_PROMPT)
         self.assertIn("remove isolated noisy beads", OPENAI_GRID_PROMPT.lower())
+
+    def test_signup_copy_does_not_explain_admin_email_rule(self):
+        frontend_html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+
+        self.assertNotIn("admin@…", frontend_html)
+        self.assertNotIn("email for admin access", frontend_html)
+        self.assertNotIn("Image edit rejected; OpenAI JSON grid used", frontend_html)
 
 
 if __name__ == "__main__":

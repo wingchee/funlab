@@ -644,15 +644,13 @@ function AdminPage({ onPatternPublished }) {
   const activeAiMeta = activeResult?.ai_enhancement;
   const activeAiGrid = activeResult?.ai_grid;
   const isActiveAiEnhancing = aiEnhancingSize && aiEnhancingSize === selectedSize;
-  const aiStatusText = activeAiGrid?.used
-    ? activeAiMeta?.error_type === 'safety_blocked'
-      ? 'Image edit rejected; OpenAI JSON grid used'
-      : 'OpenAI JSON grid preview'
+  const aiStatusText = activeAiMeta?.error_type === 'safety_blocked'
+    ? 'OpenAI rejected this image edit request'
+    : activeAiGrid?.used
+      ? 'OpenAI JSON grid preview'
     : activeAiMeta?.used
       ? 'AI enhanced preview'
-      : activeAiMeta?.error_type === 'safety_blocked'
-        ? 'OpenAI rejected this image edit request'
-        : `AI enhancement failed: ${activeAiMeta?.reason || 'unavailable'}`;
+      : `AI enhancement failed: ${activeAiMeta?.reason || 'unavailable'}`;
 
   const applyEditedGridResult = useCallback((result) => {
     if (!result?.rows || !result?.cols || !Array.isArray(result.cells)) {
@@ -1356,9 +1354,6 @@ function LoginModal({ onClose, onLogin }) {
           {loading ? <><Spinner size={14}/> {tab==='login'?'Signing in…':'Creating account…'}</> : tab==='login'?'Sign In →':'Create Account →'}
         </button>
 
-        <div style={{textAlign:'center',marginTop:14,fontSize:12,color:'#bbb'}}>
-          Tip: register with an <span style={{fontFamily:'Space Mono,monospace',color:'#888'}}>admin@…</span> email for admin access
-        </div>
       </div>
     </div>
   );
