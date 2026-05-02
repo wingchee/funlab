@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>FunLab 拼豆 — Member Portal</title>
+<title>FunLab AU — Pixel bead place for everyone</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -38,6 +38,258 @@ body {
 
 input[type=range] { appearance: none; height:4px; background:#e8e6e1; border-radius:2px; outline:none; }
 input[type=range]::-webkit-slider-thumb { appearance:none; width:16px; height:16px; border-radius:50%; background:var(--accent,#F47A8A); cursor:pointer; }
+
+.site-shell {
+  min-height: calc(100vh - 60px);
+  background:
+    radial-gradient(circle at 18% 14%, rgba(244,122,138,0.18), transparent 28%),
+    radial-gradient(circle at 82% 12%, rgba(107,181,232,0.18), transparent 28%),
+    #FEF4F5;
+}
+.site-section {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 72px 28px;
+}
+.hero {
+  min-height: calc(100vh - 60px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(320px, 0.98fr);
+  align-items: center;
+  gap: 52px;
+  padding-top: 44px;
+  padding-bottom: 44px;
+}
+.hero h1 {
+  font-size: clamp(48px, 7vw, 94px);
+  line-height: 0.94;
+  letter-spacing: 0;
+  font-weight: 800;
+  max-width: 760px;
+}
+.hero p {
+  font-size: clamp(18px, 2vw, 23px);
+  line-height: 1.55;
+  color: #554D51;
+  max-width: 620px;
+  margin: 26px 0 32px;
+}
+.hero-actions,
+.section-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 13px 20px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.btn:hover { transform: translateY(-2px); }
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #F47A8A, #6BB5E8);
+  box-shadow: 0 12px 30px rgba(244,122,138,0.28);
+}
+.btn-secondary {
+  color: #1A1A18;
+  background: rgba(255,255,255,0.84);
+  border: 1px solid #E8E6E1;
+}
+.hero-card {
+  position: relative;
+  min-height: 520px;
+  border-radius: 24px;
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(232,230,225,0.9);
+  box-shadow: 0 28px 70px rgba(91,72,78,0.13);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero-logo {
+  width: min(74%, 390px);
+  aspect-ratio: 1;
+  border-radius: 42px;
+  object-fit: cover;
+  box-shadow: 0 20px 48px rgba(244,122,138,0.16);
+}
+.bead-orbit {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 -3px 6px rgba(26,26,24,0.1);
+}
+.bead-orbit:nth-child(1) { background:#F47A8A; top:48px; left:54px; }
+.bead-orbit:nth-child(2) { background:#6BB5E8; top:86px; right:72px; width:22px; height:22px; }
+.bead-orbit:nth-child(3) { background:#FFD16D; bottom:68px; left:82px; width:24px; height:24px; }
+.bead-orbit:nth-child(4) { background:#B79CDE; bottom:112px; right:48px; }
+.hero-strip {
+  position: absolute;
+  left: 26px;
+  right: 26px;
+  bottom: 26px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.hero-stat {
+  background: rgba(254,244,245,0.9);
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  padding: 12px;
+}
+.hero-stat strong {
+  display: block;
+  font-family: 'Space Mono', monospace;
+  font-size: 20px;
+  color: #1A1A18;
+  margin-bottom: 3px;
+}
+.hero-stat span { font-size: 12px; color: #776E72; font-weight: 700; }
+.section-title {
+  font-size: clamp(34px, 4vw, 56px);
+  line-height: 1.02;
+  letter-spacing: 0;
+  max-width: 760px;
+  margin-bottom: 18px;
+}
+.section-copy {
+  color: #635B5E;
+  font-size: 18px;
+  line-height: 1.7;
+  max-width: 710px;
+}
+.offer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 34px;
+}
+.offer-card {
+  background: #FFFFFF;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  padding: 24px;
+  min-height: 245px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.offer-card h3 {
+  font-size: 24px;
+  line-height: 1.1;
+  margin-bottom: 12px;
+}
+.offer-card p {
+  color: #675F62;
+  line-height: 1.58;
+  font-size: 15px;
+}
+.offer-card .code {
+  margin-top: 20px;
+  font-family: 'Space Mono', monospace;
+  color: #F47A8A;
+  font-weight: 700;
+  font-size: 12px;
+}
+.studio-band {
+  background: #fff;
+  border-top: 1px solid #E8E6E1;
+  border-bottom: 1px solid #E8E6E1;
+}
+.studio-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(320px, 1.15fr);
+  gap: 42px;
+  align-items: center;
+}
+.mosaic {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 6px;
+  background: #FEF4F5;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  padding: 18px;
+  aspect-ratio: 1.25;
+}
+.mosaic-cell {
+  border-radius: 4px;
+  min-height: 18px;
+  box-shadow: inset 0 -2px 0 rgba(26,26,24,0.08);
+}
+.steps {
+  display: grid;
+  gap: 14px;
+  margin-top: 30px;
+}
+.step {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.step-number {
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #F47A8A, #6BB5E8);
+  border-radius: 8px;
+  padding: 12px 0;
+  text-align: center;
+}
+.step h3 { font-size: 20px; margin-bottom: 5px; }
+.step p { color: #675F62; line-height: 1.55; }
+.visit-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.8fr);
+  gap: 22px;
+  align-items: stretch;
+}
+.visit-card {
+  background: #1A1A18;
+  color: #fff;
+  border-radius: 8px;
+  padding: clamp(28px, 4vw, 46px);
+}
+.visit-card p { color: rgba(255,255,255,0.76); line-height: 1.7; margin: 18px 0 26px; }
+.contact-list {
+  background: #fff;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  padding: 26px;
+}
+.contact-row {
+  padding: 16px 0;
+  border-bottom: 1px solid #F0EDEA;
+}
+.contact-row:last-child { border-bottom: 0; }
+.contact-row strong { display:block; margin-bottom:5px; }
+.contact-row span { color:#71696C; }
+@media (max-width: 900px) {
+  .hero,
+  .studio-layout,
+  .visit-panel { grid-template-columns: 1fr; }
+  .hero { min-height: auto; }
+  .hero-card { min-height: 430px; }
+  .offer-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .site-section { padding: 52px 18px; }
+  .hero h1 { font-size: 44px; }
+  .hero-strip { grid-template-columns: 1fr; position: static; margin: 18px; width: calc(100% - 36px); }
+  .hero-card { min-height: auto; padding-top: 42px; flex-direction: column; }
+  .hero-logo { width: min(72vw, 290px); }
+}
 </style>
 </head>
 <body>
@@ -55,6 +307,8 @@ const T = {
 };
 
 const AI_ENHANCEMENT_ENABLED = false;
+const READY_GRID_IMPORT_MODE = 'ready_grid_codes';
+const PHOTO_IMPORT_MODE = 'photo_convert';
 
 // ─── API HELPERS ──────────────────────────────────────────────────────────────
 const API_BASE = '/api';
@@ -108,6 +362,20 @@ function generateGrid(w, h, palette) {
   );
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeHexColor(value, fallback = '#E8E6E1') {
+  const color = String(value || '').trim();
+  return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color) ? color : fallback;
+}
+
 // ─── SHARED UI PIECES ─────────────────────────────────────────────────────────
 function Spinner({ size = 16, color = '#aaa' }) {
   return (
@@ -119,7 +387,7 @@ function Spinner({ size = 16, color = '#aaa' }) {
   );
 }
 
-function PixelGridPreview({ color, w, h }) {
+function PixelGridPreview({ color, w, h, gridData, palette }) {
   const ref = useRef();
   const size = 160;
   useEffect(() => {
@@ -127,6 +395,31 @@ function PixelGridPreview({ color, w, h }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, size, size);
+    const hasGrid = Array.isArray(gridData) && gridData.length > 0 && Array.isArray(gridData[0]);
+    const rows = hasGrid ? gridData.length : h;
+    const cols = hasGrid ? gridData[0].length : w;
+    const drawRows = rows;
+    const drawCols = cols;
+    const cell = size / Math.max(drawRows, drawCols);
+    const offsetX = (size - drawCols * cell) / 2;
+    const offsetY = (size - drawRows * cell) / 2;
+
+    if (hasGrid) {
+      const paletteById = new Map((palette || []).map(c => [c.id, c.hex]));
+      ctx.fillStyle = '#f0ede8';
+      ctx.fillRect(offsetX, offsetY, drawCols * cell, drawRows * cell);
+      for (let y = 0; y < drawRows; y++) {
+        for (let x = 0; x < drawCols; x++) {
+          const beadId = gridData[y]?.[x];
+          if (beadId) {
+            ctx.fillStyle = paletteById.get(beadId) || color || '#CC2936';
+            ctx.fillRect(offsetX + x * cell + 0.5, offsetY + y * cell + 0.5, Math.max(cell - 1, 1), Math.max(cell - 1, 1));
+          }
+        }
+      }
+      return;
+    }
+
     const cw = size/Math.min(w,20), ch = size/Math.min(h,20);
     for (let y = 0; y < Math.min(h,20); y++) {
       for (let x = 0; x < Math.min(w,20); x++) {
@@ -135,7 +428,7 @@ function PixelGridPreview({ color, w, h }) {
         ctx.fillRect(x*cw+0.5, y*ch+0.5, cw-1, ch-1);
       }
     }
-  }, [color, w, h]);
+  }, [color, w, h, gridData, palette]);
   return <canvas ref={ref} width={size} height={size} style={{imageRendering:'pixelated',opacity:0.9}}/>;
 }
 
@@ -182,7 +475,7 @@ function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
         boxShadow: hover ? '0 8px 24px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.06)',
       }}>
       <div style={{height:160, background:`${pattern.preview_color}18`, display:'flex', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden'}}>
-        <PixelGridPreview color={pattern.preview_color} w={pattern.gridW} h={pattern.gridH}/>
+        <PixelGridPreview color={pattern.preview_color} w={pattern.gridW} h={pattern.gridH} gridData={pattern.grid_data} palette={pattern.palette}/>
         <div style={{position:'absolute',top:10,right:10}}>
           <button
             onClick={e => { e.stopPropagation(); if(!isLoggedIn) return; onFave(pattern.id); }}
@@ -234,16 +527,16 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
       borderBottom:'1px solid #e8e6e1',
       display:'flex',alignItems:'center',padding:'0 32px',height:60,
     }}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginRight:40,cursor:'pointer'}} onClick={() => setPage('gallery')}>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginRight:40,cursor:'pointer'}} onClick={() => setPage('home')}>
         <div style={{width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0}}>
-          <img src="/funlab-logo.jpeg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab" onError={e=>e.target.style.display='none'}/>
+          <img src="/logo.jpg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab AU" onError={e=>e.target.style.display='none'}/>
         </div>
         <span style={{fontWeight:800,fontSize:17,letterSpacing:'-0.02em'}}>
-          <span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>拼豆</span>
+          <span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span>
         </span>
       </div>
       <div style={{display:'flex',gap:4,flex:1}}>
-        {[['gallery','Browse'],['favorites','My Favorites']].map(([id,label]) => (
+        {[['home','Home'],['gallery','Library'],['favorites','Saved']].map(([id,label]) => (
           <button key={id} onClick={() => setPage(id)} style={{
             background: page===id ? `${T.accentRed}15` : 'transparent',
             color: page===id ? T.accentRed : '#555',
@@ -273,9 +566,113 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
           }} onClick={onLogout} title={`Logged in as ${user.name} — click to logout`}>{initial}</div>
         </div>
       ) : (
-        <button onClick={onLoginClick} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Sign In</button>
+        <button onClick={onLoginClick} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Member Sign In</button>
       )}
     </nav>
+  );
+}
+
+// ─── PUBLIC OFFICIAL WEBSITE ─────────────────────────────────────────────────
+function OfficialHome({ setPage, onLoginClick }) {
+  const mosaicColors = ['#F47A8A','#6BB5E8','#FFD16D','#B79CDE','#F9A7B3','#8DD8C8','#FFFFFF','#F47A8A','#6BB5E8','#FFD16D'];
+  return (
+    <main className="site-shell pixel-bg">
+      <section className="site-section hero">
+        <div>
+          <h1>FunLab AU is a pixel bead place for everyone.</h1>
+          <p>Drop in, slow down, and turn tiny beads into colourful keepsakes. We make Perler-style pixel craft easy for first-timers, families, friends, date nights, birthday groups, and makers who already know exactly what they want to build.</p>
+          <div className="hero-actions">
+            <button className="btn btn-primary" onClick={() => setPage('gallery')}>Explore Bead Patterns</button>
+            <button className="btn btn-secondary" onClick={onLoginClick}>Join as a Member</button>
+          </div>
+        </div>
+        <div className="hero-card" aria-label="FunLab AU brand preview">
+          <span className="bead-orbit"></span>
+          <span className="bead-orbit"></span>
+          <span className="bead-orbit"></span>
+          <span className="bead-orbit"></span>
+          <img className="hero-logo" src="/logo.jpg" alt="FunLab AU logo"/>
+          <div className="hero-strip">
+            <div className="hero-stat"><strong>All ages</strong><span>guided craft tables</span></div>
+            <div className="hero-stat"><strong>Bead art</strong><span>pixel bead making</span></div>
+            <div className="hero-stat"><strong>AU</strong><span>made for locals</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="site-section">
+        <h2 className="section-title">A bright studio for small beads, big ideas, and easy creative wins.</h2>
+        <p className="section-copy">FunLab AU helps guests choose a pattern, match bead colours, build at their own pace, and leave with a finished piece they actually want to show off. The experience is welcoming, hands-on, and simple enough for beginners without feeling basic for regular makers.</p>
+        <div className="offer-grid">
+          <article className="offer-card">
+            <div>
+              <h3>Walk-in making</h3>
+              <p>Pick a design, sit at a prepared bead station, and make something cute without needing your own tools or colour boxes.</p>
+            </div>
+            <div className="code">NO EXPERIENCE NEEDED</div>
+          </article>
+          <article className="offer-card">
+            <div>
+              <h3>Group sessions</h3>
+              <p>Host birthdays, family afternoons, school holiday plans, team catchups, and friend dates around a calm shared activity.</p>
+            </div>
+            <div className="code">PARTIES + WORKSHOPS</div>
+          </article>
+          <article className="offer-card">
+            <div>
+              <h3>Custom patterns</h3>
+              <p>Turn favourite photos, characters, logos, pets, or gifts into bead-ready grids using the FunLab pattern library and converter.</p>
+            </div>
+            <div className="code">IMAGE TO BEAD GRID</div>
+          </article>
+        </div>
+      </section>
+
+      <section className="studio-band">
+        <div className="site-section studio-layout">
+          <div>
+            <h2 className="section-title">From idea to bead map in three simple steps.</h2>
+            <p className="section-copy">The site connects the official FunLab AU brand page with the existing member library, so visitors can discover the studio and then jump straight into saved patterns and bead maps.</p>
+            <div className="steps">
+              <div className="step">
+                <div className="step-number">01</div>
+                <div><h3>Choose your vibe</h3><p>Browse cute, pop, animal, floral, game-inspired, and giftable designs.</p></div>
+              </div>
+              <div className="step">
+                <div className="step-number">02</div>
+                <div><h3>Build colour by colour</h3><p>Follow the bead grid, check off progress, and keep your palette organised.</p></div>
+              </div>
+              <div className="step">
+                <div className="step-number">03</div>
+                <div><h3>Take home your piece</h3><p>Finish with a display-ready creation made by hand, one bead at a time.</p></div>
+              </div>
+            </div>
+          </div>
+          <div className="mosaic" aria-hidden="true">
+            {Array.from({length: 120}).map((_, i) => (
+              <span key={i} className="mosaic-cell" style={{background:mosaicColors[(i + Math.floor(i / 12) * 2) % mosaicColors.length], opacity: (i % 7 === 0 || i % 11 === 0) ? 0.45 : 1}}></span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="site-section visit-panel">
+        <div className="visit-card">
+          <h2 className="section-title" style={{color:'#fff',marginBottom:0}}>Ready to make something small and unforgettable?</h2>
+          <p>Visit the pattern library, sign in to save favourites, or use the admin tools to publish new bead maps for the FunLab AU community.</p>
+          <div className="section-actions">
+            <button className="btn btn-primary" onClick={() => setPage('gallery')}>Open Library</button>
+            <button className="btn btn-secondary" onClick={onLoginClick}>Member Access</button>
+          </div>
+        </div>
+        <aside className="contact-list" aria-label="FunLab AU visit information">
+          <div className="contact-row"><strong>Experience</strong><span>Pixel bead / Perler bead art studio for everyone</span></div>
+          <div className="contact-row"><strong>Best for</strong><span>Kids, adults, dates, families, parties, creative workshops</span></div>
+          <div className="contact-row"><strong>What to bring</strong><span>Your idea. We handle beads, grids, tools, and guidance.</span></div>
+          <div className="contact-row"><strong>Online</strong><span>Browse patterns, save favourites, and prepare custom bead maps.</span></div>
+        </aside>
+      </section>
+    </main>
   );
 }
 
@@ -369,6 +766,116 @@ function BeadMapViewer({ pattern, onClose, user }) {
   gridData.flat().forEach(id => { if (id) usedColors[id] = (usedColors[id]||0)+1; });
   const totalBeads = pattern.gridW * pattern.gridH;
   const doneBeads = crossed.size;
+  const paletteById = new Map(palette.map(bead => [bead.id, bead]));
+
+  const buildGridRowsHtml = (size, showLabels = false) => gridData.map((row, y) => (
+    `<div class="grid-row">${row.map((beadId, x) => {
+      const bead = paletteById.get(beadId) || {id: beadId, name: beadId, hex: '#e0e0e0'};
+      const empty = !beadId;
+      const label = showLabels && beadId ? escapeHtml(beadId) : '';
+      return `<div class="grid-cell${empty ? ' empty' : ''}" title="${escapeHtml(`${x + 1},${y + 1} ${bead.name || beadId || 'Empty'}`)}" style="width:${size}px;height:${size}px;background:${empty ? '#F8F7F4' : safeHexColor(bead.hex)}">${label}</div>`;
+    }).join('')}</div>`
+  )).join('');
+
+  const buildLegendHtml = () => Object.entries(usedColors).map(([id, count]) => {
+    const bead = paletteById.get(id) || {id, name:id, hex:'#e0e0e0'};
+    return `<div class="legend-item"><span class="swatch" style="background:${safeHexColor(bead.hex)}"></span><span><strong>${escapeHtml(bead.name || id)}</strong><small>${escapeHtml(id)} · ${count} beads</small></span></div>`;
+  }).join('');
+
+  const openGridFullscreenTab = () => {
+    const fullscreenWindow = window.open('', '_blank');
+    if (!fullscreenWindow) {
+      alert('Please allow pop-ups to open the fullscreen grid.');
+      return;
+    }
+    fullscreenWindow.opener = null;
+    fullscreenWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>${escapeHtml(pattern.title)} fullscreen grid</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{font-family:'Space Grotesk',sans-serif;background:#171716;color:#fff;overflow:hidden}.toolbar{position:fixed;top:0;left:0;right:0;height:58px;background:rgba(26,26,24,.94);border-bottom:1px solid rgba(255,255,255,.12);display:flex;align-items:center;gap:10px;padding:0 18px;z-index:2}.title{min-width:0;flex:1}.title strong{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.title span{display:block;font:700 11px 'Space Mono',monospace;color:#aaa;margin-top:2px}.toolbar button{border:1px solid rgba(255,255,255,.18);background:#242423;color:#fff;border-radius:8px;padding:8px 12px;font:700 12px 'Space Grotesk',sans-serif;cursor:pointer}.toolbar button:hover{border-color:#F47A8A;color:#F47A8A}.viewport{position:fixed;inset:58px 0 0;overflow:hidden;cursor:grab;touch-action:none}.viewport.dragging{cursor:grabbing}.stage{position:absolute;left:0;top:0;transform-origin:0 0}.grid{display:inline-block;background:#fff;border:1px solid rgba(255,255,255,.2);box-shadow:0 20px 70px rgba(0,0,0,.35)}.grid-row{display:flex}.grid-cell{flex:0 0 auto;border:.5px solid rgba(0,0,0,.1);font:700 9px 'Space Mono',monospace;color:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;overflow:hidden}.grid-cell.empty{background:#f8f7f4}.hint{color:#bdbdb8;font-size:12px;margin-left:6px}@media(max-width:640px){.toolbar{height:auto;min-height:58px;flex-wrap:wrap;padding:10px}.viewport{inset:78px 0 0}.hint{display:none}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <div class="title"><strong>${escapeHtml(pattern.title)}</strong><span>${pattern.gridW}x${pattern.gridH} beads · ${Object.keys(usedColors).length} colors</span></div>
+  <button type="button" data-action="zoom-out">Zoom -</button>
+  <button type="button" data-action="zoom-in">Zoom +</button>
+  <button type="button" data-action="reset">Reset</button>
+  <button type="button" data-action="close">Close</button>
+  <span class="hint">Drag to pan. Scroll to zoom.</span>
+</div>
+<div class="viewport">
+  <div class="stage">
+    <div class="grid">${buildGridRowsHtml(18, pattern.gridW <= 60 && pattern.gridH <= 60)}</div>
+  </div>
+</div>
+<script>
+const viewport = document.querySelector('.viewport');
+const stage = document.querySelector('.stage');
+let scale = 1;
+let originX = 0;
+let originY = 0;
+let startX = 0;
+let startY = 0;
+let isDragging = false;
+function render(){ stage.style.transform = 'translate(' + originX + 'px,' + originY + 'px) scale(' + scale + ')'; }
+function centerGrid(){ const box = stage.getBoundingClientRect(); originX = Math.max(24, (viewport.clientWidth - box.width) / 2); originY = Math.max(24, (viewport.clientHeight - box.height) / 2); render(); }
+function zoomBy(delta, clientX = viewport.clientWidth / 2, clientY = viewport.clientHeight / 2){ const next = Math.min(5, Math.max(0.25, scale + delta)); const rect = viewport.getBoundingClientRect(); const px = clientX - rect.left - originX; const py = clientY - rect.top - originY; originX -= px * (next / scale - 1); originY -= py * (next / scale - 1); scale = next; render(); }
+document.querySelector('[data-action="zoom-in"]').addEventListener('click', () => zoomBy(0.25));
+document.querySelector('[data-action="zoom-out"]').addEventListener('click', () => zoomBy(-0.25));
+document.querySelector('[data-action="reset"]').addEventListener('click', () => { scale = 1; centerGrid(); });
+document.querySelector('[data-action="close"]').addEventListener('click', () => window.close());
+viewport.addEventListener('wheel', event => { event.preventDefault(); zoomBy(event.deltaY < 0 ? 0.15 : -0.15, event.clientX, event.clientY); }, {passive:false});
+viewport.addEventListener('pointerdown', event => { isDragging = true; viewport.classList.add('dragging'); startX = event.clientX - originX; startY = event.clientY - originY; viewport.setPointerCapture(event.pointerId); });
+viewport.addEventListener('pointermove', event => { if (!isDragging) return; originX = event.clientX - startX; originY = event.clientY - startY; render(); });
+viewport.addEventListener('pointerup', event => { isDragging = false; viewport.classList.remove('dragging'); viewport.releasePointerCapture(event.pointerId); });
+window.addEventListener('resize', centerGrid);
+requestAnimationFrame(centerGrid);
+</scr` + `ipt>
+</body>
+</html>`);
+    fullscreenWindow.document.close();
+  };
+
+  const downloadPatternPdf = () => {
+    const pdfWindow = window.open('', '_blank');
+    if (!pdfWindow) {
+      alert('Please allow pop-ups to generate the PDF.');
+      return;
+    }
+    pdfWindow.opener = null;
+    pdfWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>${escapeHtml(pattern.title)} bead grid</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box}body{font-family:'Space Grotesk',sans-serif;color:#1A1A18;margin:28px;background:#fff}header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px;border-bottom:2px solid #E8E6E1;padding-bottom:14px}h1{font-size:26px;line-height:1.1;margin:0 0 6px;font-weight:800}.meta{font:700 12px 'Space Mono',monospace;color:#777}.grid-wrap{overflow:visible;margin:18px 0}.grid{display:inline-block;border:1px solid #777;break-inside:avoid}.grid-row{display:flex}.grid-cell{width:10px;height:10px;flex:0 0 auto;border:.4px solid rgba(0,0,0,.16);font:700 5px 'Space Mono',monospace;color:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;overflow:hidden}.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 14px;margin-top:18px}.legend-item{display:flex;align-items:center;gap:8px;break-inside:avoid}.swatch{width:18px;height:18px;border:1px solid rgba(0,0,0,.18);border-radius:4px;flex:0 0 auto}.legend-item strong{display:block;font-size:12px;line-height:1.1}.legend-item small{display:block;font:700 10px 'Space Mono',monospace;color:#777;margin-top:2px}@page{size:auto;margin:12mm}@media print{body{margin:0}.no-print{display:none}.grid-cell{print-color-adjust:exact;-webkit-print-color-adjust:exact}.swatch{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>${escapeHtml(pattern.title)}</h1><div class="meta">${pattern.gridW}x${pattern.gridH} beads · ${totalBeads} total beads · ${Object.keys(usedColors).length} colors</div></div>
+  <button class="no-print" onclick="window.print()" style="border:0;border-radius:8px;background:#F47A8A;color:#fff;padding:10px 14px;font-weight:800;font-family:'Space Grotesk',sans-serif;cursor:pointer">Print / Save PDF</button>
+</header>
+<main>
+  <div class="grid-wrap"><div class="grid">${buildGridRowsHtml(10, pattern.gridW <= 80 && pattern.gridH <= 80)}</div></div>
+  <section class="legend">${buildLegendHtml()}</section>
+</main>
+</body>
+</html>`);
+    pdfWindow.document.close();
+    setTimeout(() => {
+      pdfWindow.focus();
+      pdfWindow.print();
+    }, 250);
+  };
 
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(26,26,24,0.7)',backdropFilter:'blur(6px)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
@@ -470,7 +977,16 @@ function BeadMapViewer({ pattern, onClose, user }) {
                 </div>
               );
             })}
-            <button style={{width:'100%',marginTop:16,background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+            <button onClick={openGridFullscreenTab} style={{width:'100%',marginTop:16,background:'#fff',color:T.accentRed,border:`1px solid ${T.accentRed}`,borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9V3h6"/>
+                <path d="M21 9V3h-6"/>
+                <path d="M3 15v6h6"/>
+                <path d="M21 15v6h-6"/>
+              </svg>
+              Fullscreen
+            </button>
+            <button onClick={downloadPatternPdf} style={{width:'100%',marginTop:8,background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
               ↓ Download PDF
             </button>
             {isLoggedIn && crossed.size > 0 && (
@@ -527,6 +1043,7 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
 // ─── ADMIN PAGE ───────────────────────────────────────────────────────────────
 function AdminPage({ onPatternPublished }) {
   const [step, setStep] = useState('upload');
+  const [adminImportMode, setAdminImportMode] = useState(PHOTO_IMPORT_MODE);
   const [dragging, setDragging] = useState(false);
   const [uploaded, setUploaded] = useState(null);
   const [settings, setSettings] = useState({ gridSize: '24x24', quality: 85 });
@@ -603,6 +1120,7 @@ function AdminPage({ onPatternPublished }) {
         kind: csvFile ? 'csv' : 'image',
       });
       setIsGridImage(false);
+      if (csvFile) setAdminImportMode(PHOTO_IMPORT_MODE);
       setStep('configure');
       setAiEnhancingSize(null);
       aiEnhancingRef.current.clear();
@@ -633,7 +1151,8 @@ function AdminPage({ onPatternPublished }) {
     form.append('grid_size', settings.gridSize);
     form.append('palette_name', 'MARD');
     form.append('quality', settings.quality);
-    form.append('is_grid_image', String(isGridImage));
+    form.append('is_grid_image', String(adminImportMode === READY_GRID_IMPORT_MODE ? false : isGridImage));
+    form.append('import_mode', adminImportMode);
     try {
       const res = await apiFetch('/admin/upload', { method: 'POST', body: form });
       if (!res?.ok) {
@@ -651,8 +1170,8 @@ function AdminPage({ onPatternPublished }) {
       } else {
         setSelectedSize(null);
       }
-      if (importingCsv && !publishTitle.trim()) {
-        setPublishTitle(uploaded.name.replace(/\.csv$/i, ''));
+      if ((importingCsv || adminImportMode === READY_GRID_IMPORT_MODE) && !publishTitle.trim()) {
+        setPublishTitle(uploaded.name.replace(/\.(csv|png|jpe?g|webp)$/i, ''));
       }
       setStep('preview');
     } catch (err) {
@@ -747,6 +1266,7 @@ function AdminPage({ onPatternPublished }) {
       setPublishTags(draft.publishTags || '');
       setPublishSize(draft.publishSize || 'Medium');
       setIsGridImage(Boolean(draft.isGridImage));
+      setAdminImportMode(draft.adminImportMode || PHOTO_IMPORT_MODE);
       setStep('preview');
       setAiEnhancingSize(null);
       aiEnhancingRef.current.clear();
@@ -804,6 +1324,7 @@ function AdminPage({ onPatternPublished }) {
       publishTags,
       publishSize,
       isGridImage,
+      adminImportMode,
     }));
     localStorage.setItem('pixelcraft_editor_payload', JSON.stringify(payload));
     localStorage.removeItem('pixelcraft_editor_result');
@@ -973,6 +1494,7 @@ function AdminPage({ onPatternPublished }) {
       setEditorStatus('');
       setPublishTitle('');
       setPublishTags('');
+      setAdminImportMode(PHOTO_IMPORT_MODE);
       localStorage.removeItem('pixelcraft_admin_draft');
       localStorage.removeItem('pixelcraft_editor_payload');
       apiFetch('/admin/stats').then(r => r?.json()).then(d => { if (d) setStats(d); });
@@ -994,6 +1516,27 @@ function AdminPage({ onPatternPublished }) {
       <div style={{marginBottom:32}}>
         <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>Admin <span style={{color:T.accentRed}}>Dashboard</span></h1>
         <p style={{color:'#888',fontSize:15}}>Upload images and configure bead pattern conversion</p>
+      </div>
+
+      <div style={{display:'inline-flex',background:'#fff',border:'1px solid #f0ede8',borderRadius:12,padding:4,marginBottom:24,boxShadow:'0 8px 24px rgba(26,26,24,0.04)'}}>
+        {[
+          [PHOTO_IMPORT_MODE, 'Photo / CSV'],
+          [READY_GRID_IMPORT_MODE, 'Ready Grid Image'],
+        ].map(([mode,label]) => {
+          const active = adminImportMode === mode;
+          return (
+            <button key={mode} onClick={() => {
+              setAdminImportMode(mode);
+              setIsGridImage(false);
+              setError('');
+            }} style={{
+              background:active?`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`:'transparent',
+              color:active?'#fff':'#666',
+              border:'none',borderRadius:8,padding:'10px 16px',fontWeight:800,fontSize:13,
+              cursor:'pointer',fontFamily:'inherit',transition:'all 0.2s'
+            }}>{label}</button>
+          );
+        })}
       </div>
 
       {/* Steps indicator */}
@@ -1049,8 +1592,14 @@ function AdminPage({ onPatternPublished }) {
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                   </svg>
                 </div>
-                <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>Drop image here</div>
-                <div style={{color:'#999',fontSize:13,marginBottom:20}}>or click to browse · JPG, PNG, WEBP up to 20 MB · CSV up to 5 MB</div>
+                <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>
+                  {adminImportMode === READY_GRID_IMPORT_MODE ? 'Drop ready grid image here' : 'Drop image here'}
+                </div>
+                <div style={{color:'#999',fontSize:13,marginBottom:20}}>
+                  {adminImportMode === READY_GRID_IMPORT_MODE
+                    ? 'or click to browse · numbered grid JPG, PNG, WEBP up to 20 MB'
+                    : 'or click to browse · JPG, PNG, WEBP up to 20 MB · CSV up to 5 MB'}
+                </div>
                 <span style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'10px 28px',fontWeight:700,fontSize:13,cursor:'pointer'}}>Choose File</span>
               </div>
             </div>
@@ -1082,6 +1631,18 @@ function AdminPage({ onPatternPublished }) {
                     <div style={{fontSize:12,color:'#999',marginTop:2}}>Reads bead-pattern CSV grids like bead-pattern-100x112-MARD_20260502-091813.csv</div>
                   </div>
                 </div>
+              ) : adminImportMode === READY_GRID_IMPORT_MODE ? (
+                <div style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',
+                  background:`${T.accentRed}08`,border:`2px solid ${T.accentRed}`,
+                  borderRadius:10,marginBottom:20}}>
+                  <div style={{width:20,height:20,borderRadius:5,background:T.accentRed,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13,color:T.accentRed}}>Ready Grid Image</div>
+                    <div style={{fontSize:12,color:'#999',marginTop:2}}>Reads color codes printed inside cells. Numbered row/column headers are ignored.</div>
+                  </div>
+                </div>
               ) : (
                 <div
                   onClick={()=>setIsGridImage(v=>!v)}
@@ -1109,7 +1670,7 @@ function AdminPage({ onPatternPublished }) {
                 <div style={{fontSize:11,color:'#bbb',marginTop:6}}>Generated colors will be snapped to the MARD 221-color palette before preview and publish.</div>
               </div>
 
-              {!isGridImage && uploaded.kind !== 'csv' && (
+              {!isGridImage && uploaded.kind !== 'csv' && adminImportMode !== READY_GRID_IMPORT_MODE && (
                 <div style={{marginBottom:24}}>
                   <div style={{display:'flex',justifyContent:'space-between',fontSize:13,fontWeight:600,marginBottom:8,color:'#555'}}>
                     <label>Color Accuracy</label>
@@ -1126,7 +1687,11 @@ function AdminPage({ onPatternPublished }) {
               }}>
                 {processing
                   ? <span style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10}}><Spinner size={14} color="#aaa"/>Processing…</span>
-                  : uploaded.kind === 'csv' ? 'Import CSV Pattern ✦' : isGridImage ? 'Extract Bead Grid ✦' : 'Convert to Bead Map ✦'}
+                  : uploaded.kind === 'csv'
+                    ? 'Import CSV Pattern ✦'
+                    : adminImportMode === READY_GRID_IMPORT_MODE
+                      ? 'Import Ready Grid ✦'
+                      : isGridImage ? 'Extract Bead Grid ✦' : 'Convert to Bead Map ✦'}
               </button>
             </div>
           )}
@@ -1236,7 +1801,7 @@ function AdminPage({ onPatternPublished }) {
               </div>
 
               <div style={{display:'flex',gap:10}}>
-                <button onClick={()=>{setStep('upload');setUploaded(null);setProcessingResult(null);setAiEnhancingSize(null);resetFileInput();setEditorStatus('');localStorage.removeItem('pixelcraft_admin_draft');localStorage.removeItem('pixelcraft_editor_payload');localStorage.removeItem('pixelcraft_editor_result');}} style={{flex:1,background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Upload Another</button>
+                <button onClick={()=>{setStep('upload');setUploaded(null);setProcessingResult(null);setAiEnhancingSize(null);setAdminImportMode(PHOTO_IMPORT_MODE);resetFileInput();setEditorStatus('');localStorage.removeItem('pixelcraft_admin_draft');localStorage.removeItem('pixelcraft_editor_payload');localStorage.removeItem('pixelcraft_editor_result');}} style={{flex:1,background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Upload Another</button>
                 <button onClick={handleAiEnhancePreview} disabled={!activeResult || isActiveAiEnhancing || isGridImage || !selectedSize || !(uploaded?.file || uploaded?.sourceImageDataUrl)} style={{
                   flex:1,background:(!activeResult||isActiveAiEnhancing||isGridImage||!selectedSize||!(uploaded?.file||uploaded?.sourceImageDataUrl))?'#e8e6e1':'#fff',
                   color:(!activeResult||isActiveAiEnhancing||isGridImage||!selectedSize||!(uploaded?.file||uploaded?.sourceImageDataUrl))?'#aaa':T.accentRed,
@@ -1348,9 +1913,9 @@ function LoginModal({ onClose, onLogin }) {
       <div className="scale-in" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:20,width:380,padding:36,boxShadow:'0 24px 80px rgba(0,0,0,0.2)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:28,justifyContent:'center'}}>
           <div style={{width:40,height:40,borderRadius:8,overflow:'hidden',flexShrink:0}}>
-            <img src="/funlab-logo.jpeg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab" onError={e=>e.target.style.display='none'}/>
+            <img src="/logo.jpg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab AU" onError={e=>e.target.style.display='none'}/>
           </div>
-          <span style={{fontWeight:800,fontSize:18}}><span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>拼豆</span></span>
+          <span style={{fontWeight:800,fontSize:18}}><span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span></span>
         </div>
 
         <div style={{display:'flex',background:'#f2f1ee',borderRadius:10,padding:4,marginBottom:24}}>
@@ -1397,7 +1962,7 @@ function LoginModal({ onClose, onLogin }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
-  const [page, setPage] = useState(() => localStorage.getItem('pc_page') || 'gallery');
+  const [page, setPage] = useState(() => localStorage.getItem('pc_page') || 'home');
   const [patterns, setPatterns] = useState([]);
   const [patternsLoading, setPatternsLoading] = useState(true);
   const [favIds, setFavIds] = useState(new Set());
@@ -1506,6 +2071,9 @@ function App() {
     <div style={{minHeight:'100vh',background:T.bgColor}}>
       <Navbar page={page} setPage={setPage} user={user} onLoginClick={() => setShowLogin(true)} onLogout={onLogout}/>
 
+      {page === 'home' && (
+        <OfficialHome setPage={setPage} onLoginClick={() => setShowLogin(true)}/>
+      )}
       {page === 'gallery' && (
         <GalleryPage patterns={patterns} loading={patternsLoading} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user}/>
       )}
