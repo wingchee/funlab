@@ -6,16 +6,19 @@ from urllib.request import urlopen
 
 logger = logging.getLogger(__name__)
 
-BEAD_IMAGE_ENHANCEMENT_PROMPT = """Create a family-friendly pixel bead craft reference from the input image.
+BEAD_IMAGE_ENHANCEMENT_PROMPT = """Create a family-friendly Q-style pixel bead craft reference from the input image.
 
 Requirements:
-- Keep only the main visible subject and remove distracting background elements.
-- Render the subject as a simple non-photoreal craft icon with bright, flat color blocks and clean outlines.
-- Use a pure white (#FFFFFF) background.
+- Identify the core subject automatically and remove all background objects.
+- Keep the full subject contour intact, including important hair, accessories, small decorations, transparent materials, and edge details that define the subject.
+- Render the subject as a cute Q-style craft icon with bright block colors and clean simple lines.
+- Center the subject and show the complete full body or complete upper-body crop; do not cut off important parts.
+- Use a pure white (#FFFFFF) background or transparent-looking pure white background.
 - Do not identify, label, or realistically reproduce any person; if a person appears, make the result generic and non-identifying.
-- Do not add shadows, complex textures, gradients, text, logos, or photographic details.
+- Add no shadows, complex textures, gradients, text, logos, or photographic details.
+- Avoid background residue, broken subject parts, white edge halos, noisy borders, and extra objects.
 - Keep the subject complete and easy to recognize at a small bead-grid size.
-- Preserve only broad silhouette, accessories, and distinctive colors needed for a bead pattern.
+- Preserve silhouette, accessories, distinctive colors, and visual identity needed for a bead pattern while simplifying fine detail into bead-friendly color blocks.
 - Output a PNG-style image suitable for converting into a Perler/Hama bead grid.
 """
 

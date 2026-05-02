@@ -56,6 +56,11 @@ For an Amazon Lightsail Ubuntu instance, use the launch-script guide:
 - `LIGHTSAIL_UBUNTU_LAUNCH.md`
 - `scripts/lightsail_launch_ubuntu.sh`
 
+For an already-created Amazon Lightsail Ubuntu instance, use the SSH deploy guide:
+
+- `LIGHTSAIL_SSH_DEPLOY.md`
+- `scripts/deploy_lightsail_ubuntu.sh`
+
 ### 1. Set a secure secret key
 
 ```bash

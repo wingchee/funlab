@@ -29,9 +29,28 @@ def test_admin_preview_opens_editor_in_same_window_and_restores_result():
     assert "pixelcraft_admin_draft" in html
     assert "pixelcraft_editor_payload" in html
     assert "pixelcraft_editor_result" in html
+    assert "source_image_data_url" in html
     assert "window.open('/bead-editor?pixelcraft=1'" not in html
     assert "window.location.href = '/bead-editor?pixelcraft=1" in html
     assert "restorePixelCraftDraft" in html
+
+
+def test_admin_preview_ai_enhance_posts_image_and_current_grid_json():
+    html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+    page = (ROOT / "perler-beads-master" / "src" / "app" / "page.tsx").read_text(
+        encoding="utf-8"
+    )
+    admin = (ROOT / "backend" / "routers" / "admin.py").read_text(encoding="utf-8")
+    openai_grid = (ROOT / "backend" / "openai_grid.py").read_text(encoding="utf-8")
+
+    assert "AI Enhance" in html
+    assert "handleAiEnhancePreview" in html
+    assert "current_grid_json" in html
+    assert "form.append('current_grid_json', JSON.stringify(activeResult));" in html
+    assert "handleAiEnhanceFromEditor" not in page
+    assert "current_grid_json: Optional[str] = Form(None)" in admin
+    assert 'grid_kwargs["current_grid_json"] = current_grid_json' in admin
+    assert "current_grid_json" in openai_grid
 
 
 def test_admin_ai_enhancement_is_paused_without_removing_endpoint():

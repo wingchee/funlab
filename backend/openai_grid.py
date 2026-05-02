@@ -28,10 +28,15 @@ _DEFAULT_COLORS = [
 OPENAI_GRID_PROMPT = """Create a JSON bead grid for Perler/Hama 拼豆 from the image.
 
 Requirements:
+- If a second image is supplied, treat it as the original reference image. Use it to recover the true subject shape, pose, accessories, and distinctive colors that may have been lost in the edited craft image.
 - Return only the main craft subject, using blank cells for background.
 - Use simple flat bead colors, clear outline shapes, and no text or labels inside the grid.
-- Preserve the subject's broad silhouette and important colors.
+- Preserve the subject's full silhouette, important accessories, recognizable markings, and dominant colors.
 - Keep the grid within the requested size. Use fewer rows or columns if needed to preserve aspect ratio.
+- Prefer 6 to 14 bead colors unless the subject genuinely needs more.
+- Add a clean outline where it improves readability, but do not make every edge heavy.
+- Remove isolated noisy beads, background residue, random speckles, and thin details that would be hard to build.
+- Use blank/background cells around the subject instead of filling the whole grid.
 - Use short symbols such as A, B, C for bead colors. Use an empty string for blank/background cells.
 - Palette hex values must be six-digit #RRGGBB colors.
 """
@@ -224,6 +229,8 @@ def generate_openai_bead_grid(
     grid_size: str,
     quality: int,
     ai_metadata: Optional[dict[str, Any]] = None,
+    current_grid_json: Optional[str] = None,
+    original_image_path: Optional[str] = None,
 ) -> tuple[Optional[dict[str, Any]], dict[str, Any]]:
     """Ask OpenAI vision for a bead-grid JSON payload and normalize it for publishing."""
     metadata: dict[str, Any] = {
@@ -258,16 +265,33 @@ def generate_openai_bead_grid(
             f"Create a JSON bead grid for this image with at most {max_cols} columns "
             f"and {max_rows} rows. Color accuracy target: {quality} out of 100."
         )
+        if current_grid_json:
+            prompt += (
+                "\nUse this current editor grid JSON as reference context. Preserve useful "
+                "manual edits, simplify noisy regions, and return a complete improved grid "
+                f"for the image:\n{current_grid_json[:12000]}"
+            )
+            metadata["current_grid_reference_used"] = True
+        content: list[dict[str, str]] = [
+            {"type": "input_text", "text": prompt},
+            {"type": "input_image", "image_url": data_url, "detail": "high"},
+        ]
+        if original_image_path and os.path.abspath(original_image_path) != os.path.abspath(image_path):
+            content.append(
+                {
+                    "type": "input_image",
+                    "image_url": _image_to_data_url(original_image_path),
+                    "detail": "high",
+                }
+            )
+            metadata["original_reference_image_used"] = True
         response = client.responses.parse(
             model=metadata["model"],
             instructions=OPENAI_GRID_PROMPT,
             input=[
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": prompt},
-                        {"type": "input_image", "image_url": data_url, "detail": "high"},
-                    ],
+                    "content": content,
                 }
             ],
             text_format=OpenAIGridResponse,
