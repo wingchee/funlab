@@ -376,6 +376,25 @@ function safeHexColor(value, fallback = '#E8E6E1') {
   return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color) ? color : fallback;
 }
 
+function formatDuration(totalSeconds) {
+  const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  return [hours, minutes, seconds].map(v => String(v).padStart(2, '0')).join(':');
+}
+
+function parseDurationInput(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 0;
+  if (/^\d+$/.test(raw)) return Number(raw);
+  const parts = raw.split(':').map(v => Number(v));
+  if (parts.some(v => !Number.isFinite(v) || v < 0)) return 0;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
+
 // ─── SHARED UI PIECES ─────────────────────────────────────────────────────────
 function Spinner({ size = 16, color = '#aaa' }) {
   return (
@@ -536,7 +555,7 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
         </span>
       </div>
       <div style={{display:'flex',gap:4,flex:1}}>
-        {[['home','Home'],['gallery','Library'],['favorites','Saved']].map(([id,label]) => (
+        {[['home','Home'],['gallery','Library'],['favorites','Saved'],['timetable','Time Table']].map(([id,label]) => (
           <button key={id} onClick={() => setPage(id)} style={{
             background: page===id ? `${T.accentRed}15` : 'transparent',
             color: page===id ? T.accentRed : '#555',
@@ -1036,6 +1055,298 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── TIME TABLE PAGE ─────────────────────────────────────────────────────────
+function TimeTablePage({ user }) {
+  const isAdmin = !!user?.is_admin;
+  const [tables, setTables] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastLoadedAt, setLastLoadedAt] = useState(Date.now());
+  const [tick, setTick] = useState(Date.now());
+  const [selectedTable, setSelectedTable] = useState(() => {
+    const number = Number(new URLSearchParams(window.location.search).get('table'));
+    return Number.isInteger(number) && number >= 1 && number <= 8 ? number : null;
+  });
+  const [setValues, setSetValues] = useState({});
+  const [savingTable, setSavingTable] = useState(null);
+  const [message, setMessage] = useState('');
+
+  const buildTableLink = (tableNumber) => `${window.location.origin}${window.location.pathname}?page=timetable&table=${tableNumber}`;
+
+  const loadTables = useCallback(async () => {
+    try {
+      const res = await apiFetch('/timetable');
+      const data = res?.ok ? await res.json() : null;
+      if (Array.isArray(data)) {
+        setTables(data);
+        setLastLoadedAt(Date.now());
+        setSetValues(prev => {
+          const next = { ...prev };
+          data.forEach(table => {
+            if (next[table.table_number] == null) next[table.table_number] = formatDuration(table.elapsed_seconds);
+          });
+          return next;
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTables();
+    const refresh = setInterval(loadTables, 5000);
+    return () => clearInterval(refresh);
+  }, [loadTables]);
+
+  useEffect(() => {
+    const clock = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(clock);
+  }, []);
+
+  const liveElapsed = (table) => {
+    const base = Number(table.elapsed_seconds) || 0;
+    if (!table.is_running) return base;
+    return base + Math.max(0, Math.floor((tick - lastLoadedAt) / 1000));
+  };
+
+  const runTableAction = async (tableNumber, action) => {
+    setSavingTable(tableNumber);
+    setMessage('');
+    try {
+      const res = await apiFetch(`/timetable/${tableNumber}/${action}`, { method: 'POST' });
+      if (!res?.ok) {
+        setMessage('Unable to update table status.');
+        return;
+      }
+      await loadTables();
+    } finally {
+      setSavingTable(null);
+    }
+  };
+
+  const setTableTime = async (table) => {
+    const tableNumber = table.table_number;
+    setSavingTable(tableNumber);
+    setMessage('');
+    try {
+      const elapsedSeconds = parseDurationInput(setValues[tableNumber] || formatDuration(liveElapsed(table)));
+      const res = await apiFetch(`/timetable/${tableNumber}`, {
+        method: 'PUT',
+        body: JSON.stringify({ elapsed_seconds: elapsedSeconds, is_running: table.is_running }),
+      });
+      if (!res?.ok) {
+        setMessage('Use seconds or HH:MM:SS for table time.');
+        return;
+      }
+      await loadTables();
+    } finally {
+      setSavingTable(null);
+    }
+  };
+
+  const openTableLink = (tableNumber) => {
+    setSelectedTable(tableNumber);
+    window.history.replaceState(null, '', `?page=timetable&table=${tableNumber}`);
+  };
+
+  const clearIndividualTable = () => {
+    setSelectedTable(null);
+    window.history.replaceState(null, '', '?page=timetable');
+  };
+
+  const copyTableLink = async (tableNumber) => {
+    const link = buildTableLink(tableNumber);
+    openTableLink(tableNumber);
+    try {
+      await navigator.clipboard.writeText(link);
+      setMessage(`Table ${tableNumber} link copied.`);
+    } catch (err) {
+      setMessage(link);
+    }
+  };
+
+  const tableSlots = tables.length
+    ? tables
+    : Array.from({length: 8}, (_, index) => ({
+      table_number: index + 1,
+      status: 'Free',
+      is_running: false,
+      elapsed_seconds: 0,
+    }));
+
+  const isIndividualTablePage = selectedTable != null;
+  const visibleTableSlots = isIndividualTablePage
+    ? tableSlots.filter(table => table.table_number === selectedTable)
+    : tableSlots;
+  const occupiedCount = tableSlots.filter(table => table.is_running).length;
+
+  return (
+    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:24,marginBottom:28,flexWrap:'wrap'}}>
+        <div>
+          <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>
+            {isIndividualTablePage ? <>Table <span style={{color:T.accentRed}}>#{selectedTable}</span></> : <>Time <span style={{color:T.accentRed}}>Table</span></>}
+          </h1>
+          <p style={{color:'#888',fontSize:15}}>
+            {isIndividualTablePage ? `Only Table ${selectedTable} stopwatch is shown on this individual page.` : 'Check which bead tables are free and follow each table stopwatch.'}
+          </p>
+        </div>
+        <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+          {!isIndividualTablePage && (
+            <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px'}}>
+              <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:700}}>Occupied</div>
+              <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:20,color:T.accentRed}}>{occupiedCount}/8</div>
+            </div>
+          )}
+          {isIndividualTablePage && (
+            <button onClick={clearIndividualTable} style={{background:'#fff',color:'#555',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+              All Tables
+            </button>
+          )}
+          <button onClick={loadTables} style={{background:'#fff',color:'#555',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {message && (
+        <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',marginBottom:18,color:'#666',fontSize:13,fontWeight:600,overflowWrap:'anywhere'}}>
+          {message}
+        </div>
+      )}
+
+      <div style={{display:'grid',gridTemplateColumns:isIndividualTablePage?'minmax(260px, 420px)':'repeat(auto-fill, minmax(260px, 1fr))',gap:18}}>
+        {visibleTableSlots.map(table => {
+          const elapsed = liveElapsed(table);
+          const active = selectedTable === table.table_number;
+          const saving = savingTable === table.table_number;
+          return (
+            <article key={table.table_number} className="fade-in" style={{
+              background:'#fff',
+              border:`2px solid ${active ? T.accentRed : '#E8E6E1'}`,
+              borderRadius:8,
+              padding:20,
+              boxShadow:active?'0 12px 30px rgba(244,122,138,0.16)':'0 4px 18px rgba(26,26,24,0.05)'
+            }}>
+              <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'flex-start',marginBottom:18}}>
+                <div>
+                  <div style={{fontSize:11,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:700,marginBottom:5}}>Table</div>
+                  <h2 style={{fontSize:28,fontWeight:800,lineHeight:1}}>#{table.table_number}</h2>
+                </div>
+                <span style={{
+                  background:table.is_running?`${T.accentRed}18`:'#ECFDF5',
+                  color:table.is_running?T.accentRed:'#047857',
+                  border:`1px solid ${table.is_running?`${T.accentRed}45`:'#A7F3D0'}`,
+                  borderRadius:20,
+                  padding:'5px 10px',
+                  fontSize:11,
+                  fontWeight:800,
+                  letterSpacing:'.04em',
+                  textTransform:'uppercase'
+                }}>{table.status}</span>
+              </div>
+
+              <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:34,letterSpacing:'0',marginBottom:18,color:'#1A1A18'}}>
+                {formatDuration(elapsed)}
+              </div>
+
+              <div style={{display:'flex',gap:8,marginBottom:isAdmin?16:0}}>
+                <a href={buildTableLink(table.table_number)} onClick={e => { e.preventDefault(); openTableLink(table.table_number); }} style={{
+                  flex:1,
+                  textAlign:'center',
+                  textDecoration:'none',
+                  background:'#f8f7f4',
+                  color:'#555',
+                  border:'1px solid #E8E6E1',
+                  borderRadius:8,
+                  padding:'9px 10px',
+                  fontWeight:700,
+                  fontSize:13
+                }}>Open Link</a>
+                <button onClick={() => copyTableLink(table.table_number)} style={{
+                  flex:1,
+                  background:'#fff',
+                  color:T.accentRed,
+                  border:`1px solid ${T.accentRed}`,
+                  borderRadius:8,
+                  padding:'9px 10px',
+                  fontWeight:700,
+                  fontSize:13,
+                  cursor:'pointer',
+                  fontFamily:'inherit'
+                }}>Copy Link</button>
+              </div>
+
+              {isAdmin && (
+                <div style={{borderTop:'1px solid #F0EDEA',paddingTop:16}}>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
+                    <button onClick={() => runTableAction(table.table_number, 'start')} disabled={saving || table.is_running} style={{
+                      background:table.is_running?'#e8e6e1':T.accentRed,
+                      color:table.is_running?'#aaa':'#fff',
+                      border:'none',
+                      borderRadius:8,
+                      padding:'9px 0',
+                      fontWeight:800,
+                      fontSize:12,
+                      cursor:(saving || table.is_running)?'default':'pointer',
+                      fontFamily:'inherit'
+                    }}>Start</button>
+                    <button onClick={() => runTableAction(table.table_number, 'stop')} disabled={saving || !table.is_running} style={{
+                      background:!table.is_running?'#e8e6e1':T.accentOrange,
+                      color:!table.is_running?'#aaa':'#fff',
+                      border:'none',
+                      borderRadius:8,
+                      padding:'9px 0',
+                      fontWeight:800,
+                      fontSize:12,
+                      cursor:(saving || !table.is_running)?'default':'pointer',
+                      fontFamily:'inherit'
+                    }}>Stop</button>
+                    <button onClick={() => runTableAction(table.table_number, 'reset')} disabled={saving} style={{
+                      background:'#f2f1ee',
+                      color:'#555',
+                      border:'none',
+                      borderRadius:8,
+                      padding:'9px 0',
+                      fontWeight:800,
+                      fontSize:12,
+                      cursor:saving?'default':'pointer',
+                      fontFamily:'inherit'
+                    }}>Reset</button>
+                  </div>
+                  <div style={{display:'flex',gap:8}}>
+                    <input value={setValues[table.table_number] || ''} onChange={e=>setSetValues(prev => ({...prev, [table.table_number]: e.target.value}))} placeholder="HH:MM:SS" style={{
+                      minWidth:0,
+                      flex:1,
+                      border:'1px solid #E8E6E1',
+                      borderRadius:8,
+                      padding:'9px 10px',
+                      fontFamily:'Space Mono,monospace',
+                      fontSize:12,
+                      outline:'none'
+                    }}/>
+                    <button onClick={() => setTableTime(table)} disabled={saving} style={{
+                      background:'#1A1A18',
+                      color:'#fff',
+                      border:'none',
+                      borderRadius:8,
+                      padding:'9px 12px',
+                      fontWeight:800,
+                      fontSize:12,
+                      cursor:saving?'default':'pointer',
+                      fontFamily:'inherit'
+                    }}>{saving ? 'Saving' : 'Set'}</button>
+                  </div>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1961,8 +2272,15 @@ function LoginModal({ onClose, onLogin }) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+function getInitialPage() {
+  const queryPage = new URLSearchParams(window.location.search).get('page');
+  const allowed = new Set(['home', 'gallery', 'favorites', 'timetable', 'admin']);
+  if (allowed.has(queryPage)) return queryPage;
+  return localStorage.getItem('pc_page') || 'home';
+}
+
 function App() {
-  const [page, setPage] = useState(() => localStorage.getItem('pc_page') || 'home');
+  const [page, setPage] = useState(getInitialPage);
   const [patterns, setPatterns] = useState([]);
   const [patternsLoading, setPatternsLoading] = useState(true);
   const [favIds, setFavIds] = useState(new Set());
@@ -2079,6 +2397,9 @@ function App() {
       )}
       {page === 'favorites' && (
         <FavoritesPage patterns={patterns} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user} onLoginClick={() => setShowLogin(true)}/>
+      )}
+      {page === 'timetable' && (
+        <TimeTablePage user={user}/>
       )}
       {page === 'admin' && user?.is_admin && (
         <AdminPage onPatternPublished={loadPatterns}/>

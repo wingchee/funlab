@@ -38,3 +38,13 @@ class Favorite(Base):
     created_at = Column(DateTime, server_default=func.now())
     user = relationship("User", back_populates="favorites")
     pattern = relationship("Pattern", back_populates="favorites")
+
+
+class TableTimer(Base):
+    __tablename__ = "table_timers"
+    id = Column(Integer, primary_key=True)
+    table_number = Column(Integer, unique=True, nullable=False, index=True)
+    is_running = Column(Boolean, default=False, nullable=False)
+    elapsed_seconds = Column(Integer, default=0, nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

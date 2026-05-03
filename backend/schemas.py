@@ -18,3 +18,8 @@ class PublishRequest(BaseModel):
     tags: List[str]
     size: str
     processing_result: dict
+
+
+class TableTimerSetRequest(BaseModel):
+    elapsed_seconds: int
+    is_running: bool = False

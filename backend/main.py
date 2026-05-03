@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import engine, Base
-from routers import auth, patterns, favorites, admin
+from routers import auth, patterns, favorites, admin, timetable
 from seed import seed_demo_data
 
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -37,6 +37,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(patterns.router, prefix="/api/patterns", tags=["patterns"])
 app.include_router(favorites.router, prefix="/api/favorites", tags=["favorites"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(timetable.router, prefix="/api/timetable", tags=["timetable"])
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
