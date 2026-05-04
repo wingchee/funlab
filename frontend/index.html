@@ -277,32 +277,109 @@ input[type=range]::-webkit-slider-thumb { appearance:none; width:16px; height:16
 .contact-row span { color:#71696C; }
 .app-content { min-height: calc(100vh - 60px); }
 .top-nav { position: sticky; }
-.mobile-bottom-nav { display: none; }
-.mobile-bottom-nav button {
-  min-width: 0;
-  min-height: 50px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: #776E72;
-  font-family: inherit;
-  font-size: 10px;
-  font-weight: 800;
+.mobile-menu-button {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  background: #fff;
+  color: #343033;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
-.mobile-bottom-nav button span {
+.mobile-menu-button span,
+.mobile-menu-button span::before,
+.mobile-menu-button span::after {
   display: block;
-  font-size: 18px;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  content: '';
+}
+.mobile-menu-button span {
+  position: relative;
+}
+.mobile-menu-button span::before,
+.mobile-menu-button span::after {
+  position: absolute;
+  left: 0;
+}
+.mobile-menu-button span::before { top: -6px; }
+.mobile-menu-button span::after { top: 6px; }
+.mobile-drawer-overlay { display: none; }
+.mobile-nav-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(326px, 88vw);
+  background: #fff;
+  box-shadow: -20px 0 56px rgba(52,48,51,0.18);
+  transform: translateX(100%);
+  transition: transform 220ms ease;
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+}
+.mobile-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #F0EDEA;
+}
+.mobile-drawer-close {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  background: #fff;
+  color: #343033;
+  font-size: 24px;
   line-height: 1;
-  margin-bottom: 3px;
+  cursor: pointer;
 }
-.mobile-bottom-nav button strong {
-  display: block;
-  font-size: 10px;
+.mobile-drawer-items {
+  display: grid;
+  gap: 8px;
+  padding: 18px 0;
 }
-.mobile-bottom-nav button.active {
+.mobile-drawer-items button {
+  min-height: 50px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #3F393D;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-family: inherit;
+  font-weight: 750;
+  font-size: 15px;
+  cursor: pointer;
+}
+.mobile-drawer-items button.active {
   background: rgba(244,122,138,0.13);
   color: #F47A8A;
+}
+.mobile-drawer-auth {
+  margin-top: auto;
+  border-top: 1px solid #F0EDEA;
+  padding-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+.mobile-drawer-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #6F666B;
+  font-size: 13px;
 }
 .page-shell { min-height: calc(100vh - 60px); padding: 40px; }
 .page-inner { max-width: 1180px; margin: 0 auto; }
@@ -361,20 +438,25 @@ input[type=range]::-webkit-slider-thumb { appearance:none; width:16px; height:16
   }
   .top-nav > div:first-child { margin-right: 0 !important; }
   .desktop-nav-links { display: none !important; }
-  .app-content { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
-  .mobile-bottom-nav {
+  .desktop-auth-actions { display: none !important; }
+  .mobile-menu-button { display: flex; margin-left: auto; }
+  .app-content { padding-bottom: 0; }
+  .mobile-drawer-overlay {
     position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 140;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-    background: rgba(255,255,255,0.96);
-    border-top: 1px solid #E8E6E1;
-    backdrop-filter: blur(14px);
+    inset: 0;
+    z-index: 180;
+    display: block;
+    background: rgba(26,26,24,0.42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+  .mobile-drawer-overlay.mobile-drawer-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .mobile-drawer-overlay.mobile-drawer-open .mobile-nav-drawer {
+    transform: translateX(0);
   }
   .site-section { padding: 38px 16px; }
   .hero { gap: 28px; padding-top: 26px; }
@@ -672,7 +754,7 @@ function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
 }
 
 // ─── NAVBAR ──────────────────────────────────────────────────────────────────
-function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
+function Navbar({ page, setPage, user, onLoginClick, onLogout, onMobileMenuClick, mobileMenuOpen }) {
   const isLoggedIn = !!user;
   const isAdmin = user?.is_admin;
   const initial = user?.name ? user.name[0].toUpperCase() : 'U';
@@ -709,41 +791,112 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
           }}>Admin</button>
         )}
       </div>
-      {isLoggedIn ? (
-        <div style={{display:'flex',alignItems:'center',gap:12}}>
-          {isAdmin && (
-            <span style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',background:T.accentOrange,color:'#fff',padding:'3px 8px',borderRadius:20}}>ADMIN</span>
-          )}
-          <div style={{
-            width:34,height:34,borderRadius:'50%',
-            background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
-            display:'flex',alignItems:'center',justifyContent:'center',
-            color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer',userSelect:'none'
-          }} onClick={onLogout} title={`Logged in as ${user.name} — click to logout`}>{initial}</div>
-        </div>
-      ) : (
-        <button onClick={onLoginClick} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Member Sign In</button>
-      )}
+      <button
+        className="mobile-menu-button"
+        type="button"
+        onClick={onMobileMenuClick}
+        aria-label="Open navigation"
+        aria-expanded={mobileMenuOpen ? 'true' : 'false'}
+      >
+        <span aria-hidden="true"></span>
+      </button>
+      <div className="desktop-auth-actions" style={{display:'flex',alignItems:'center',gap:12}}>
+        {isLoggedIn ? (
+          <>
+            {isAdmin && (
+              <span style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',background:T.accentOrange,color:'#fff',padding:'3px 8px',borderRadius:20}}>ADMIN</span>
+            )}
+            <div style={{
+              width:34,height:34,borderRadius:'50%',
+              background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
+              display:'flex',alignItems:'center',justifyContent:'center',
+              color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer',userSelect:'none'
+            }} onClick={onLogout} title={`Logged in as ${user.name} — click to logout`}>{initial}</div>
+          </>
+        ) : (
+          <button onClick={onLoginClick} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Member Sign In</button>
+        )}
+      </div>
     </nav>
   );
 }
 
-function MobileBottomNav({ page, setPage }) {
+function MobileNavDrawer({ page, setPage, user, onLoginClick, onLogout, open, onClose }) {
+  const isAdmin = user?.is_admin;
+  const initial = user?.name ? user.name[0].toUpperCase() : 'U';
   const items = [
-    ['home', 'Home', '⌂'],
-    ['gallery', 'Library', '▦'],
-    ['favorites', 'Saved', '♡'],
-    ['timetable', 'Time', '◷'],
+    ['home', 'Home'],
+    ['gallery', 'Library'],
+    ['favorites', 'Saved'],
+    ['timetable', 'Time Table'],
   ];
+  if (isAdmin) items.push(['admin', 'Admin']);
+
+  const goToPage = (id) => {
+    setPage(id);
+    onClose();
+  };
+
+  const openLogin = () => {
+    onClose();
+    onLoginClick();
+  };
+
+  const logout = () => {
+    onClose();
+    onLogout();
+  };
+
   return (
-    <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-      {items.map(([id, label, icon]) => (
-        <button key={id} onClick={() => setPage(id)} className={page === id ? 'active' : ''}>
-          <span aria-hidden="true">{icon}</span>
-          <strong>{label}</strong>
-        </button>
-      ))}
-    </nav>
+    <div
+      className={`mobile-drawer-overlay ${open ? 'mobile-drawer-open' : ''}`}
+      aria-hidden={open ? 'false' : 'true'}
+      onClick={onClose}
+    >
+      <aside className="mobile-nav-drawer mobile-drawer-panel" aria-label="Mobile navigation drawer" onClick={e => e.stopPropagation()}>
+        <div className="mobile-drawer-header">
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0}}>
+              <img src="/logo.jpg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab AU" onError={e=>e.target.style.display='none'}/>
+            </div>
+            <span style={{fontWeight:800,fontSize:17}}>
+              <span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span>
+            </span>
+          </div>
+          <button className="mobile-drawer-close" type="button" onClick={onClose} aria-label="Close navigation">&times;</button>
+        </div>
+
+        <div className="mobile-drawer-items">
+          {items.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => goToPage(id)} className={page === id ? 'active' : ''}>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mobile-drawer-auth">
+          {user ? (
+            <>
+              <div className="mobile-drawer-user">
+                <div style={{
+                  width:34,height:34,borderRadius:'50%',
+                  background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
+                  display:'flex',alignItems:'center',justifyContent:'center',
+                  color:'#fff',fontWeight:800,fontSize:13,flexShrink:0
+                }}>{initial}</div>
+                <div>
+                  <strong style={{display:'block',color:'#343033',fontSize:14}}>{user.name}</strong>
+                  <span>{isAdmin ? 'Admin account' : 'Member account'}</span>
+                </div>
+              </div>
+              <button className="btn btn-secondary" type="button" onClick={logout}>Sign Out</button>
+            </>
+          ) : (
+            <button className="btn btn-primary" type="button" onClick={openLogin}>Member Sign In</button>
+          )}
+        </div>
+      </aside>
+    </div>
   );
 }
 
@@ -2452,6 +2605,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
   const [openPattern, setOpenPattern] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const loadPatterns = useCallback(async () => {
     setPatternsLoading(true);
@@ -2493,6 +2647,12 @@ function App() {
     if (!authLoading && page === 'admin' && !user?.is_admin) setPage('gallery');
   }, [authLoading, page, user?.is_admin]);
   useEffect(() => { localStorage.setItem('pc_page', page); }, [page]);
+  useEffect(() => { setMobileMenuOpen(false); }, [page]);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    if (mobileMenuOpen) document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [mobileMenuOpen]);
 
   const onFave = async (id) => {
     if (!user) { setShowLogin(true); return; }
@@ -2551,8 +2711,24 @@ function App() {
 
   return (
     <div style={{minHeight:'100vh',background:T.bgColor}}>
-      <Navbar page={page} setPage={setPage} user={user} onLoginClick={() => setShowLogin(true)} onLogout={onLogout}/>
-      <MobileBottomNav page={page} setPage={setPage}/>
+      <Navbar
+        page={page}
+        setPage={setPage}
+        user={user}
+        onLoginClick={() => setShowLogin(true)}
+        onLogout={onLogout}
+        onMobileMenuClick={() => setMobileMenuOpen(true)}
+        mobileMenuOpen={mobileMenuOpen}
+      />
+      <MobileNavDrawer
+        page={page}
+        setPage={setPage}
+        user={user}
+        onLoginClick={() => setShowLogin(true)}
+        onLogout={onLogout}
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
       <main className="app-content">
       {page === 'home' && (

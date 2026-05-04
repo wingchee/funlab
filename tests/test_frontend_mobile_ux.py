@@ -9,14 +9,20 @@ def read_frontend() -> str:
     return FRONTEND.read_text(encoding="utf-8")
 
 
-def test_mobile_app_shell_has_bottom_navigation_and_content_offset():
+def test_mobile_app_shell_has_navigation_drawer():
     html = read_frontend()
 
-    assert "function MobileBottomNav" in html
+    assert "function MobileNavDrawer" in html
     assert 'className="app-content"' in html
-    assert 'className="mobile-bottom-nav"' in html
+    assert 'className="mobile-menu-button"' in html
+    assert "mobile-drawer-overlay" in html
+    assert "mobile-nav-drawer" in html
+    assert "mobile-drawer-panel" in html
+    assert "mobile-drawer-open" in html
+    assert "setMobileMenuOpen(false)" in html
+    assert "function MobileBottomNav" not in html
+    assert "<MobileBottomNav page={page} setPage={setPage}/>" not in html
     assert "@media (max-width: 720px)" in html
-    assert "padding-bottom: calc(74px + env(safe-area-inset-bottom))" in html
 
 
 def test_gallery_and_cards_have_mobile_comfort_classes():
