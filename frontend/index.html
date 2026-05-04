@@ -275,6 +275,70 @@ input[type=range]::-webkit-slider-thumb { appearance:none; width:16px; height:16
 .contact-row:last-child { border-bottom: 0; }
 .contact-row strong { display:block; margin-bottom:5px; }
 .contact-row span { color:#71696C; }
+.app-content { min-height: calc(100vh - 60px); }
+.top-nav { position: sticky; }
+.mobile-bottom-nav { display: none; }
+.mobile-bottom-nav button {
+  min-width: 0;
+  min-height: 50px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #776E72;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.mobile-bottom-nav button span {
+  display: block;
+  font-size: 18px;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.mobile-bottom-nav button strong {
+  display: block;
+  font-size: 10px;
+}
+.mobile-bottom-nav button.active {
+  background: rgba(244,122,138,0.13);
+  color: #F47A8A;
+}
+.page-shell { min-height: calc(100vh - 60px); padding: 40px; }
+.page-inner { max-width: 1180px; margin: 0 auto; }
+.page-header { margin-bottom: 28px; }
+.library-toolbar { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; align-items: center; }
+.filter-chips { display: flex; gap: 6px; }
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+.pattern-card { background: #fff; border-radius: 8px; overflow: hidden; cursor: pointer; }
+.viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26,26,24,0.7);
+  backdrop-filter: blur(6px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.viewer-modal {
+  background: #fff;
+  border-radius: 20px;
+  width: min(920px, 95vw);
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.25);
+}
+.viewer-header { padding: 18px 24px; border-bottom: 1px solid #f0ede8; display: flex; align-items: center; gap: 16px; }
+.viewer-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+.viewer-grid-area { flex: 1; overflow: auto; padding: 24px; }
+.viewer-legend { width: 200px; border-left: 1px solid #f0ede8; padding: 20px 16px; overflow: auto; flex-shrink: 0; }
+.viewer-actions { display: grid; gap: 8px; margin-top: 16px; }
+.admin-layout { display: grid; grid-template-columns: 1fr 380px; gap: 24px; max-width: 960px; }
+.admin-action-row { display: flex; gap: 10px; flex-wrap: wrap; }
 @media (max-width: 900px) {
   .hero,
   .studio-layout,
@@ -289,6 +353,78 @@ input[type=range]::-webkit-slider-thumb { appearance:none; width:16px; height:16
   .hero-strip { grid-template-columns: 1fr; position: static; margin: 18px; width: calc(100% - 36px); }
   .hero-card { min-height: auto; padding-top: 42px; flex-direction: column; }
   .hero-logo { width: min(72vw, 290px); }
+}
+@media (max-width: 720px) {
+  .top-nav {
+    height: 56px !important;
+    padding: 0 14px !important;
+  }
+  .top-nav > div:first-child { margin-right: 0 !important; }
+  .desktop-nav-links { display: none !important; }
+  .app-content { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 140;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    background: rgba(255,255,255,0.96);
+    border-top: 1px solid #E8E6E1;
+    backdrop-filter: blur(14px);
+  }
+  .site-section { padding: 38px 16px; }
+  .hero { gap: 28px; padding-top: 26px; }
+  .hero h1 { font-size: 36px; line-height: 1.02; }
+  .hero p { font-size: 15px; line-height: 1.55; margin: 18px 0 22px; }
+  .hero-card { border-radius: 18px; }
+  .offer-card { min-height: auto; padding: 20px; }
+  .visit-card,
+  .contact-list { padding: 22px; }
+  .page-shell { padding: 24px 16px !important; }
+  .page-header { margin-bottom: 20px !important; }
+  .page-header h1 { font-size: 30px !important; line-height: 1.02 !important; }
+  .library-toolbar { gap: 10px !important; margin-bottom: 20px !important; }
+  .library-toolbar > * { width: 100%; max-width: none !important; }
+  .filter-chips {
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+  .filter-chips button { flex: 0 0 auto; min-height: 40px; }
+  .pattern-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
+  .pattern-card {
+    display: grid;
+    grid-template-columns: 128px 1fr;
+    min-height: 150px;
+  }
+  .pattern-card > div:first-child { height: auto !important; min-height: 150px; }
+  .pattern-card canvas { max-width: 112px; max-height: 112px; }
+  .viewer-overlay { align-items: stretch; padding: 0; }
+  .viewer-modal { width: 100vw; max-height: none; height: 100dvh; border-radius: 0; }
+  .viewer-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+  }
+  .viewer-body { display: block; overflow: auto; background: #f8f7f4; }
+  .viewer-grid-area { padding: 14px 14px 96px; overflow: auto; }
+  .viewer-legend { width: auto; border-left: 0; border-top: 1px solid #f0ede8; background: #fff; }
+  .viewer-actions {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    padding-top: 8px;
+  }
+  .admin-layout { grid-template-columns: 1fr !important; max-width: none !important; }
+  .admin-action-row > button { min-width: 140px; }
 }
 </style>
 </head>
@@ -483,6 +619,7 @@ function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
   const sizeColor = { Small:'#10B981', Medium:'#F5A623', Large:'#F47A8A' }[pattern.size];
   return (
     <div
+      className="pattern-card"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={() => onOpen(pattern)}
@@ -540,7 +677,7 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
   const isAdmin = user?.is_admin;
   const initial = user?.name ? user.name[0].toUpperCase() : 'U';
   return (
-    <nav style={{
+    <nav className="top-nav" style={{
       position:'sticky',top:0,zIndex:100,
       background:'rgba(250,250,248,0.92)',backdropFilter:'blur(12px)',
       borderBottom:'1px solid #e8e6e1',
@@ -554,7 +691,7 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
           <span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span>
         </span>
       </div>
-      <div style={{display:'flex',gap:4,flex:1}}>
+      <div className="desktop-nav-links" style={{display:'flex',gap:4,flex:1}}>
         {[['home','Home'],['gallery','Library'],['favorites','Saved'],['timetable','Time Table']].map(([id,label]) => (
           <button key={id} onClick={() => setPage(id)} style={{
             background: page===id ? `${T.accentRed}15` : 'transparent',
@@ -587,6 +724,25 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
       ) : (
         <button onClick={onLoginClick} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Member Sign In</button>
       )}
+    </nav>
+  );
+}
+
+function MobileBottomNav({ page, setPage }) {
+  const items = [
+    ['home', 'Home', '⌂'],
+    ['gallery', 'Library', '▦'],
+    ['favorites', 'Saved', '♡'],
+    ['timetable', 'Time', '◷'],
+  ];
+  return (
+    <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+      {items.map(([id, label, icon]) => (
+        <button key={id} onClick={() => setPage(id)} className={page === id ? 'active' : ''}>
+          <span aria-hidden="true">{icon}</span>
+          <strong>{label}</strong>
+        </button>
+      ))}
     </nav>
   );
 }
@@ -710,14 +866,15 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
   });
 
   return (
-    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
-      <div style={{marginBottom:32}}>
+    <div className="page-shell gallery-page pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div className="page-inner">
+      <div className="page-header" style={{marginBottom:32}}>
         <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>
           Discover <span style={{color:T.accentRed}}>Bead Patterns</span>
         </h1>
         <p style={{color:'#888',fontSize:15}}>Convert your favorite images into beautiful pixel bead art</p>
       </div>
-      <div style={{display:'flex',gap:12,marginBottom:32,flexWrap:'wrap',alignItems:'center'}}>
+      <div className="library-toolbar" style={{display:'flex',gap:12,marginBottom:32,flexWrap:'wrap',alignItems:'center'}}>
         <div style={{display:'flex',alignItems:'center',gap:10,background:'#fff',border:'2px solid #e8e6e1',borderRadius:12,padding:'10px 16px',flex:1,maxWidth:400,transition:'border-color 0.15s'}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.5">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
@@ -727,7 +884,7 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
             style={{border:'none',outline:'none',fontSize:14,background:'transparent',width:'100%',fontFamily:'inherit',color:'#1A1A18'}}/>
           {search && <button onClick={()=>setSearch('')} style={{background:'none',border:'none',cursor:'pointer',color:'#aaa',fontSize:16,lineHeight:1}}>×</button>}
         </div>
-        <div style={{display:'flex',gap:6}}>
+        <div className="filter-chips" style={{display:'flex',gap:6}}>
           {['All','Small','Medium','Large'].map(s => (
             <button key={s} onClick={()=>setSizeFilter(s)} style={{
               background: sizeFilter===s ? T.accentRed : '#fff',
@@ -744,7 +901,7 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
           }
         </span>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
+      <div className="pattern-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
         {filtered.map(p => (
           <div key={p.id} className="fade-in">
             <PatternCard pattern={p} onOpen={onOpen} isFaved={favIds.has(p.id)} onFave={onFave} isLoggedIn={isLoggedIn}/>
@@ -757,6 +914,7 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
             <div style={{fontSize:13,marginTop:4}}>Try a different search or filter</div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -897,10 +1055,10 @@ requestAnimationFrame(centerGrid);
   };
 
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(26,26,24,0.7)',backdropFilter:'blur(6px)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
-      <div className="scale-in" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:20,width:'min(920px,95vw)',maxHeight:'90vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 80px rgba(0,0,0,0.25)'}}>
+    <div className="viewer-overlay" onClick={onClose}>
+      <div className="viewer-modal scale-in" onClick={e=>e.stopPropagation()}>
         {/* Header */}
-        <div style={{padding:'18px 24px',borderBottom:'1px solid #f0ede8',display:'flex',alignItems:'center',gap:16}}>
+        <div className="viewer-header">
           <div style={{flex:1}}>
             <h2 style={{fontSize:20,fontWeight:800,letterSpacing:'-0.02em'}}>{pattern.title}</h2>
             <div style={{fontSize:12,color:'#999',marginTop:2,fontFamily:'Space Mono,monospace'}}>
@@ -928,8 +1086,8 @@ requestAnimationFrame(centerGrid);
         </div>
 
         {/* Body */}
-        <div style={{display:'flex',flex:1,overflow:'hidden',minHeight:0}}>
-          <div style={{flex:1,overflow:'auto',padding:24}}>
+        <div className="viewer-body">
+          <div className="viewer-grid-area">
             {!isLoggedIn && (
               <div style={{background:`${T.accentOrange}15`,border:`1px solid ${T.accentOrange}40`,borderRadius:10,padding:'10px 16px',marginBottom:16,fontSize:13,color:'#8B6914',display:'flex',alignItems:'center',gap:8}}>
                 <span>🔒</span>
@@ -972,7 +1130,7 @@ requestAnimationFrame(centerGrid);
           </div>
 
           {/* Legend */}
-          <div style={{width:200,borderLeft:'1px solid #f0ede8',padding:'20px 16px',overflow:'auto',flexShrink:0}}>
+          <div className="viewer-legend">
             <div style={{fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',color:'#aaa',fontWeight:700,marginBottom:12}}>Color Legend</div>
             {Object.entries(usedColors).map(([id, count]) => {
               const bead = palette.find(b=>b.id===id) || {id,name:id,hex:'#e0e0e0'};
@@ -996,21 +1154,23 @@ requestAnimationFrame(centerGrid);
                 </div>
               );
             })}
-            <button onClick={openGridFullscreenTab} style={{width:'100%',marginTop:16,background:'#fff',color:T.accentRed,border:`1px solid ${T.accentRed}`,borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9V3h6"/>
-                <path d="M21 9V3h-6"/>
-                <path d="M3 15v6h6"/>
-                <path d="M21 15v6h-6"/>
-              </svg>
-              Fullscreen
-            </button>
-            <button onClick={downloadPatternPdf} style={{width:'100%',marginTop:8,background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
-              ↓ Download PDF
-            </button>
-            {isLoggedIn && crossed.size > 0 && (
-              <button onClick={()=>setCrossed(new Set())} style={{width:'100%',marginTop:8,background:'transparent',color:'#bbb',border:'1px solid #e8e6e1',borderRadius:8,padding:'8px 0',fontWeight:600,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Reset Progress</button>
-            )}
+            <div className="viewer-actions">
+              <button onClick={openGridFullscreenTab} style={{width:'100%',background:'#fff',color:T.accentRed,border:`1px solid ${T.accentRed}`,borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9V3h6"/>
+                  <path d="M21 9V3h-6"/>
+                  <path d="M3 15v6h6"/>
+                  <path d="M21 15v6h-6"/>
+                </svg>
+                Fullscreen
+              </button>
+              <button onClick={downloadPatternPdf} style={{width:'100%',background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+                ↓ Download PDF
+              </button>
+              {isLoggedIn && crossed.size > 0 && (
+                <button onClick={()=>setCrossed(new Set())} style={{width:'100%',background:'transparent',color:'#bbb',border:'1px solid #e8e6e1',borderRadius:8,padding:'8px 0',fontWeight:600,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Reset Progress</button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1024,7 +1184,7 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
   const faved = patterns.filter(p => favIds.has(p.id));
 
   if (!isLoggedIn) return (
-    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+    <div className="page-shell pixel-bg" style={{minHeight:'calc(100vh - 60px)',display:'flex',alignItems:'center',justifyContent:'center'}}>
       <div style={{textAlign:'center',maxWidth:360,padding:40}}>
         <div style={{width:80,height:80,borderRadius:20,background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 24px',fontSize:36}}>♥</div>
         <h2 style={{fontSize:24,fontWeight:800,marginBottom:8}}>Your Favorites</h2>
@@ -1035,8 +1195,9 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
   );
 
   return (
-    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
-      <div style={{marginBottom:32}}>
+    <div className="page-shell pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div className="page-inner">
+      <div className="page-header" style={{marginBottom:32}}>
         <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>My <span style={{color:T.accentRed}}>Favorites</span></h1>
         <p style={{color:'#888',fontSize:15}}>{faved.length} saved pattern{faved.length !== 1 ? 's' : ''}</p>
       </div>
@@ -1047,7 +1208,7 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
           <div style={{fontSize:13,marginTop:4}}>Heart a pattern in the gallery to save it here</div>
         </div>
       ) : (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
+        <div className="pattern-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
           {faved.map(p => (
             <div key={p.id} className="fade-in">
               <PatternCard pattern={p} onOpen={onOpen} isFaved={true} onFave={onFave} isLoggedIn={true}/>
@@ -1055,6 +1216,7 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -1185,8 +1347,9 @@ function TimeTablePage({ user }) {
   const occupiedCount = tableSlots.filter(table => table.is_running).length;
 
   return (
-    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
-      <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:24,marginBottom:28,flexWrap:'wrap'}}>
+    <div className="page-shell pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div className="page-inner">
+      <div className="page-header" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:24,marginBottom:28,flexWrap:'wrap'}}>
         <div>
           <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>
             {isIndividualTablePage ? <>Table <span style={{color:T.accentRed}}>#{selectedTable}</span></> : <>Time <span style={{color:T.accentRed}}>Table</span></>}
@@ -1346,6 +1509,7 @@ function TimeTablePage({ user }) {
             </article>
           );
         })}
+      </div>
       </div>
     </div>
   );
@@ -1877,7 +2041,7 @@ function AdminPage({ onPatternPublished }) {
         </div>
       )}
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 380px',gap:24,maxWidth:960}}>
+      <div className="admin-layout" style={{display:'grid',gridTemplateColumns:'1fr 380px',gap:24,maxWidth:960}}>
         <div>
           {/* Step 1: Upload */}
           {step === 'upload' && (
@@ -2111,7 +2275,7 @@ function AdminPage({ onPatternPublished }) {
                 </div>
               </div>
 
-              <div style={{display:'flex',gap:10}}>
+              <div className="admin-action-row" style={{display:'flex',gap:10}}>
                 <button onClick={()=>{setStep('upload');setUploaded(null);setProcessingResult(null);setAiEnhancingSize(null);setAdminImportMode(PHOTO_IMPORT_MODE);resetFileInput();setEditorStatus('');localStorage.removeItem('pixelcraft_admin_draft');localStorage.removeItem('pixelcraft_editor_payload');localStorage.removeItem('pixelcraft_editor_result');}} style={{flex:1,background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Upload Another</button>
                 <button onClick={handleAiEnhancePreview} disabled={!activeResult || isActiveAiEnhancing || isGridImage || !selectedSize || !(uploaded?.file || uploaded?.sourceImageDataUrl)} style={{
                   flex:1,background:(!activeResult||isActiveAiEnhancing||isGridImage||!selectedSize||!(uploaded?.file||uploaded?.sourceImageDataUrl))?'#e8e6e1':'#fff',
@@ -2388,7 +2552,9 @@ function App() {
   return (
     <div style={{minHeight:'100vh',background:T.bgColor}}>
       <Navbar page={page} setPage={setPage} user={user} onLoginClick={() => setShowLogin(true)} onLogout={onLogout}/>
+      <MobileBottomNav page={page} setPage={setPage}/>
 
+      <main className="app-content">
       {page === 'home' && (
         <OfficialHome setPage={setPage} onLoginClick={() => setShowLogin(true)}/>
       )}
@@ -2404,6 +2570,7 @@ function App() {
       {page === 'admin' && user?.is_admin && (
         <AdminPage onPatternPublished={loadPatterns}/>
       )}
+      </main>
 
       {openPattern && (
         <BeadMapViewer pattern={openPattern} onClose={() => setOpenPattern(null)} user={user}/>
