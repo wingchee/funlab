@@ -51,6 +51,45 @@ class OpenAIGridTests(unittest.TestCase):
             ],
         )
 
+    def test_ready_grid_code_matrix_strips_blue_header_rows_when_numbers_ocr_poorly(self):
+        trimmed, colors = admin_router._trim_numbered_header_grid_and_colors(
+            [
+                ["1", "", "H11", ""],
+                ["2", "A23", "E16", "F21"],
+                ["", "", "", ""],
+            ],
+            [
+                ["#E5F1FF", "#FFFFFF", "#CDCDCD", "#FFFFFF"],
+                ["#E4F0FC", "#E1C9BD", "#FBF4EC", "#F2B8C6"],
+                ["#E5F1FF", "#E4F0FC", "#E5F0FD", "#E4EFFA"],
+            ],
+        )
+
+        self.assertEqual(trimmed, [["", "H11", ""], ["A23", "E16", "F21"]])
+        self.assertEqual(colors, [["#FFFFFF", "#CDCDCD", "#FFFFFF"], ["#E1C9BD", "#FBF4EC", "#F2B8C6"]])
+
+    def test_ready_grid_trim_preserves_numbered_dimensions_when_edge_rows_are_empty(self):
+        trimmed, colors = admin_router._trim_numbered_header_grid_and_colors(
+            [
+                ["", "1", "2"],
+                ["1", "A23", ""],
+                ["2", "", ""],
+                ["3", "", ""],
+                ["", "1", "2"],
+            ],
+            [
+                ["#E5F1FF", "#E5F1FF", "#E5F1FF"],
+                ["#E4F0FC", "#E1C9BD", "#FFFFFF"],
+                ["#E4F0FC", "#FFFFFF", "#FFFFFF"],
+                ["#E4F0FC", "#E5F1FF", "#E5F1FF"],
+                ["#E5F1FF", "#E5F1FF", "#E5F1FF"],
+            ],
+        )
+
+        self.assertEqual(trimmed, [["A23", ""], ["", ""], ["", ""]])
+        self.assertEqual(len(colors), 3)
+        self.assertEqual(len(colors[0]), 2)
+
     def test_ready_grid_code_matrix_builds_processing_result(self):
         result = admin_router._code_grid_to_processing_result(
             [
@@ -93,6 +132,30 @@ class OpenAIGridTests(unittest.TestCase):
             ],
         )
         self.assertEqual(result["artifacts"], {"source": "ready_grid_image_import"})
+
+    def test_ready_grid_legend_colors_override_cell_ocr_misreads(self):
+        assigned = admin_router._assign_ready_grid_codes_from_legend_colors(
+            [
+                ["E2", "", "F21"],
+                ["", "E1", ""],
+            ],
+            [
+                ["#F2B8C8", "#FFFFFF", "#F2B8C4"],
+                ["#FBF4EC", "#F2B8C7", "#FFFFFF"],
+            ],
+            [
+                {"symbol": "F21", "color_hex": "#F2B8C6"},
+                {"symbol": "E16", "color_hex": "#FBF4EC"},
+            ],
+        )
+
+        self.assertEqual(
+            assigned,
+            [
+                ["F21", "", "F21"],
+                ["E16", "F21", ""],
+            ],
+        )
 
     def test_csv_upload_is_normalized_to_processing_result(self):
         class FakeUpload:

@@ -112,6 +112,50 @@ def _looks_like_numbered_header_column(rows: list[list[str]], index: int) -> boo
     return numeric_count >= 2 and code_count == 0 and numeric_count / len(values) >= 0.55
 
 
+def _is_blue_header_hex(hex_value: str) -> bool:
+    r, g, b = _hex_to_rgb_tuple(hex_value)
+    return min(r, g, b) >= 220 and b - r >= 14 and b - g >= 5
+
+
+def _looks_like_blue_header_row(colors: Optional[list[list[str]]], index: int) -> bool:
+    if not colors or index >= len(colors):
+        return False
+    row = colors[index]
+    if not row:
+        return False
+    blue_count = sum(1 for color in row if _is_blue_header_hex(_normalize_hex(color)))
+    return blue_count >= 2 and blue_count / len(row) >= 0.6
+
+
+def _looks_like_blue_header_column(colors: Optional[list[list[str]]], index: int) -> bool:
+    if not colors:
+        return False
+    values = [row[index] for row in colors if index < len(row)]
+    if not values:
+        return False
+    blue_count = sum(1 for color in values if _is_blue_header_hex(_normalize_hex(color)))
+    return blue_count >= 2 and blue_count / len(values) >= 0.6
+
+
+def _max_numeric_value(values: list[str]) -> Optional[int]:
+    numbers = [int(value) for value in values if str(value or "").strip().isdigit()]
+    return max(numbers) if numbers else None
+
+
+def _target_body_dimensions(rows: list[list[str]]) -> tuple[Optional[int], Optional[int]]:
+    if not rows:
+        return None, None
+    top_cols = _max_numeric_value(rows[0])
+    bottom_cols = _max_numeric_value(rows[-1])
+    body_rows = [row for row in rows if row and not _looks_like_numbered_header_row(row)]
+    left_rows = _max_numeric_value([row[0] for row in body_rows])
+    right_rows = _max_numeric_value([row[-1] for row in body_rows])
+    return max([value for value in (left_rows, right_rows) if value is not None], default=None), max(
+        [value for value in (top_cols, bottom_cols) if value is not None],
+        default=None,
+    )
+
+
 def _trim_numbered_header_grid_and_colors(
     raw_grid: list[list[str]],
     color_grid: Optional[list[list[str]]] = None,
@@ -122,6 +166,7 @@ def _trim_numbered_header_grid_and_colors(
 
     width = max(len(row) for row in rows)
     rows = [row + [""] * (width - len(row)) for row in rows]
+    target_rows, target_cols = _target_body_dimensions(rows)
     colors = None
     if color_grid is not None:
         colors = []
@@ -129,25 +174,35 @@ def _trim_numbered_header_grid_and_colors(
             color_row = color_grid[idx] if idx < len(color_grid) else []
             colors.append([_normalize_hex(cell) for cell in color_row] + ["#FFFFFF"] * (width - len(color_row)))
 
-    while rows and _looks_like_numbered_header_row(rows[0]):
+    while rows and (_looks_like_numbered_header_row(rows[0]) or _looks_like_blue_header_row(colors, 0)):
         rows = rows[1:]
         if colors is not None:
             colors = colors[1:]
-    while rows and _looks_like_numbered_header_row(rows[-1]):
+    while rows and (_looks_like_numbered_header_row(rows[-1]) or _looks_like_blue_header_row(colors, len(rows) - 1)):
         rows = rows[:-1]
         if colors is not None:
             colors = colors[:-1]
     if not rows:
         return [], [] if color_grid is not None else None
 
-    while rows and _looks_like_numbered_header_column(rows, 0):
+    while rows and (_looks_like_numbered_header_column(rows, 0) or _looks_like_blue_header_column(colors, 0)):
         rows = [row[1:] for row in rows]
         if colors is not None:
             colors = [row[1:] for row in colors]
-    while rows and rows[0] and _looks_like_numbered_header_column(rows, len(rows[0]) - 1):
+    while rows and rows[0] and (
+        _looks_like_numbered_header_column(rows, len(rows[0]) - 1)
+        or _looks_like_blue_header_column(colors, len(rows[0]) - 1)
+    ):
         rows = [row[:-1] for row in rows]
         if colors is not None:
             colors = [row[:-1] for row in colors]
+
+    if rows and target_rows and len(rows) < target_rows:
+        row_width = len(rows[0])
+        missing_rows = target_rows - len(rows)
+        rows.extend([[""] * row_width for _ in range(missing_rows)])
+        if colors is not None:
+            colors.extend([["#FFFFFF"] * row_width for _ in range(missing_rows)])
 
     return [[_normalize_ready_grid_code(cell) for cell in row] for row in rows], colors
 
@@ -202,10 +257,61 @@ def _is_empty_ready_grid_color(hex_value: str) -> bool:
     return min(r, g, b) >= 248 and max(r, g, b) - min(r, g, b) <= 8
 
 
+def _assign_ready_grid_codes_from_legend_colors(
+    code_grid: list[list[str]],
+    color_grid: list[list[str]],
+    legend_entries: list[dict],
+) -> list[list[str]]:
+    if not legend_entries:
+        return [[_normalize_ready_grid_code(cell) for cell in row] for row in code_grid]
+
+    legend_colors = [
+        (_normalize_ready_grid_code(entry.get("symbol")), _normalize_hex(entry.get("color_hex")))
+        for entry in legend_entries
+    ]
+    legend_colors = [(symbol, color_hex) for symbol, color_hex in legend_colors if symbol]
+    legend_by_symbol = {symbol: color_hex for symbol, color_hex in legend_colors}
+    if not legend_colors:
+        return [[_normalize_ready_grid_code(cell) for cell in row] for row in code_grid]
+
+    assigned: list[list[str]] = []
+    for row_idx, row in enumerate(code_grid):
+        assigned_row: list[str] = []
+        for col_idx, raw_symbol in enumerate(row):
+            sampled_hex = "#FFFFFF"
+            if row_idx < len(color_grid) and col_idx < len(color_grid[row_idx]):
+                sampled_hex = _normalize_hex(color_grid[row_idx][col_idx])
+
+            raw_symbol = _normalize_ready_grid_code(raw_symbol)
+            if raw_symbol in legend_by_symbol and _color_distance_sq(sampled_hex, legend_by_symbol[raw_symbol]) <= 2200:
+                assigned_row.append(raw_symbol)
+                continue
+
+            if not _is_empty_ready_grid_color(sampled_hex):
+                nearest_symbol = ""
+                nearest_distance = float("inf")
+                for candidate_symbol, candidate_hex in legend_colors:
+                    distance = _color_distance_sq(sampled_hex, candidate_hex)
+                    if distance < nearest_distance:
+                        nearest_symbol = candidate_symbol
+                        nearest_distance = distance
+                if nearest_symbol and nearest_distance <= 1200:
+                    assigned_row.append(nearest_symbol)
+                    continue
+
+            assigned_row.append(raw_symbol)
+        assigned.append(assigned_row)
+    return assigned
+
+
 def _recover_ready_grid_symbols(
     code_grid: list[list[str]],
     color_grid: Optional[list[list[str]]],
+    legend_entries: Optional[list[dict]] = None,
 ) -> list[list[str]]:
+    if color_grid and legend_entries:
+        code_grid = _assign_ready_grid_codes_from_legend_colors(code_grid, color_grid, legend_entries)
+
     normalized = [[_normalize_ready_grid_code(cell) for cell in row] for row in code_grid]
     if not color_grid:
         return normalized
@@ -267,11 +373,12 @@ def _code_grid_to_processing_result(
     color_grid: Optional[list[list[str]]] = None,
     *,
     source_name: str,
+    legend_entries: Optional[list[dict]] = None,
 ) -> dict:
     if not code_grid:
         raise ValueError("No bead codes found in the grid image")
 
-    code_grid = _recover_ready_grid_symbols(code_grid, color_grid)
+    code_grid = _recover_ready_grid_symbols(code_grid, color_grid, legend_entries)
     cols = max(len(row) for row in code_grid)
     rows = len(code_grid)
     cells = []
@@ -418,6 +525,35 @@ def _ocr_ready_grid_cell(cell: np.ndarray) -> str:
     return re.sub(r"[^A-Z0-9]", "", str(text or "").upper())
 
 
+def _extract_ready_grid_legend_entries(image: np.ndarray, grid_bottom: int) -> list[dict]:
+    band = image[grid_bottom + 4:min(image.shape[0], grid_bottom + 700), :]
+    if band.size == 0:
+        return []
+    gray = cv2.cvtColor(band, cv2.COLOR_BGR2GRAY)
+    entries: list[dict] = []
+    seen: set[str] = set()
+    configs = [
+        "--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789() ",
+        "--psm 11 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789() ",
+    ]
+    for scale in (2, 3):
+        resized = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        for config in configs:
+            text = pytesseract.image_to_string(resized, config=config)
+            for match in _CODE_TOKEN_RE.finditer(str(text or "").upper()):
+                symbol = _normalize_ready_grid_code(match.group(0))
+                if not symbol or symbol in seen:
+                    continue
+                entries.append({
+                    "symbol": symbol,
+                    "color_hex": _mard_hex_for_code(symbol, "#FFFFFF"),
+                    "confidence": 1.0,
+                    "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0},
+                })
+                seen.add(symbol)
+    return entries
+
+
 def _extract_ready_grid_image_result(img_path: str) -> dict:
     image = cv2.imread(img_path)
     if image is None:
@@ -438,11 +574,30 @@ def _extract_ready_grid_image_result(img_path: str) -> dict:
         raw_colors.append(color_row)
 
     trimmed_codes, color_rows = _trim_numbered_header_grid_and_colors(raw_codes, raw_colors)
+    has_top_header = _looks_like_numbered_header_row(raw_codes[0]) or _looks_like_blue_header_row(raw_colors, 0)
+    has_bottom_header = _looks_like_numbered_header_row(raw_codes[-1]) or _looks_like_blue_header_row(raw_colors, len(raw_colors) - 1)
+    if has_top_header and has_bottom_header and len(trimmed_codes) < len(raw_codes) - 2:
+        row_width = len(trimmed_codes[0]) if trimmed_codes else max(0, len(raw_codes[0]) - 2)
+        missing_rows = len(raw_codes) - 2 - len(trimmed_codes)
+        trimmed_codes.extend([[""] * row_width for _ in range(missing_rows)])
+        if color_rows is not None:
+            color_rows.extend([["#FFFFFF"] * row_width for _ in range(missing_rows)])
+
+    has_left_header = _looks_like_numbered_header_column(raw_codes, 0) or _looks_like_blue_header_column(raw_colors, 0)
+    has_right_header = _looks_like_numbered_header_column(raw_codes, len(raw_codes[0]) - 1) or _looks_like_blue_header_column(raw_colors, len(raw_codes[0]) - 1)
+    expected_cols = len(raw_codes[0]) - 2 if has_left_header and has_right_header else None
+    if expected_cols and trimmed_codes and len(trimmed_codes[0]) < expected_cols:
+        missing_cols = expected_cols - len(trimmed_codes[0])
+        trimmed_codes = [row + [""] * missing_cols for row in trimmed_codes]
+        if color_rows is not None:
+            color_rows = [row + ["#FFFFFF"] * missing_cols for row in color_rows]
+    legend_entries = _extract_ready_grid_legend_entries(image, y_lines[-1])
 
     return _code_grid_to_processing_result(
         trimmed_codes,
         color_rows,
         source_name=os.path.basename(img_path),
+        legend_entries=legend_entries,
     )
 
 
