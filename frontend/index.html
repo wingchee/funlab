@@ -602,6 +602,30 @@ function formatDuration(totalSeconds) {
   return [hours, minutes, seconds].map(v => String(v).padStart(2, '0')).join(':');
 }
 
+function formatDateInput(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function calculateChargedSeconds(occupiedSeconds) {
+  const occupied = Math.max(0, Math.floor(Number(occupiedSeconds) || 0));
+  if (occupied === 0) return 0;
+  if (occupied <= 3600) return 3600;
+  const remaining = occupied - 3600;
+  let blocks = Math.floor(remaining / 1800);
+  if (remaining % 1800 > 600) blocks += 1;
+  return 3600 + blocks * 1800;
+}
+
 function parseDurationInput(value) {
   const raw = String(value || '').trim();
   if (!raw) return 0;
@@ -696,9 +720,16 @@ function ConversionPreview({ result, maxSize = 160 }) {
 }
 
 // ─── PATTERN CARD ─────────────────────────────────────────────────────────────
-function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
+function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn, isAdmin, onDelete }) {
   const [hover, setHover] = useState(false);
   const sizeColor = { Small:'#10B981', Medium:'#F5A623', Large:'#F47A8A' }[pattern.size];
+  const confirmDelete = (event) => {
+    event.stopPropagation();
+    if (!isAdmin || !onDelete) return;
+    if (window.confirm(`Delete ${pattern.title}? This cannot be undone.`)) {
+      onDelete(pattern.id);
+    }
+  };
   return (
     <div
       className="pattern-card"
@@ -732,6 +763,37 @@ function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
         <div style={{position:'absolute',top:10,left:10}}>
           <span style={{background:sizeColor,color:'#fff',fontSize:10,fontWeight:700,letterSpacing:'.06em',padding:'3px 8px',borderRadius:20,fontFamily:'Space Mono,monospace'}}>{pattern.size.toUpperCase()}</span>
         </div>
+        {isAdmin && (
+          <div style={{position:'absolute',bottom:10,right:10}}>
+            <button
+              onClick={confirmDelete}
+              title="Delete pattern"
+              style={{
+                background:'#fff',
+                color:'#B91C1C',
+                border:'1px solid rgba(185,28,28,0.24)',
+                borderRadius:8,
+                padding:'6px 9px',
+                cursor:'pointer',
+                display:'flex',
+                alignItems:'center',
+                gap:5,
+                fontSize:11,
+                fontWeight:800,
+                fontFamily:'inherit',
+                boxShadow:'0 2px 8px rgba(0,0,0,0.15)'
+              }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M8 6V4h8v2"/>
+                <path d="M19 6l-1 14H6L5 6"/>
+                <path d="M10 11v5"/>
+                <path d="M14 11v5"/>
+              </svg>
+              Delete
+            </button>
+          </div>
+        )}
       </div>
       <div style={{padding:'14px 16px 16px'}}>
         <div style={{fontWeight:700,fontSize:15,marginBottom:6}}>{pattern.title}</div>
@@ -1005,10 +1067,11 @@ function OfficialHome({ setPage, onLoginClick }) {
 }
 
 // ─── GALLERY PAGE ─────────────────────────────────────────────────────────────
-function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
+function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user, onPatternDeleted }) {
   const [search, setSearch] = useState('');
   const [sizeFilter, setSizeFilter] = useState('All');
   const isLoggedIn = !!user;
+  const isAdmin = !!user?.is_admin;
 
   const filtered = patterns.filter(p => {
     const matchSearch = !search ||
@@ -1057,7 +1120,7 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
       <div className="pattern-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
         {filtered.map(p => (
           <div key={p.id} className="fade-in">
-            <PatternCard pattern={p} onOpen={onOpen} isFaved={favIds.has(p.id)} onFave={onFave} isLoggedIn={isLoggedIn}/>
+            <PatternCard pattern={p} onOpen={onOpen} isFaved={favIds.has(p.id)} onFave={onFave} isLoggedIn={isLoggedIn} isAdmin={isAdmin} onDelete={onPatternDeleted}/>
           </div>
         ))}
         {!loading && filtered.length === 0 && (
@@ -1076,6 +1139,7 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
 // ─── BEAD MAP VIEWER ──────────────────────────────────────────────────────────
 function BeadMapViewer({ pattern, onClose, user }) {
   const isLoggedIn = !!user;
+  const isAdmin = !!user?.is_admin;
   const [crossed, setCrossed] = useState(new Set());
   const [zoom, setZoom] = useState(1);
   const [highlight, setHighlight] = useState(null);
@@ -1317,9 +1381,11 @@ requestAnimationFrame(centerGrid);
                 </svg>
                 Fullscreen
               </button>
-              <button onClick={downloadPatternPdf} style={{width:'100%',background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
-                ↓ Download PDF
-              </button>
+              {isAdmin && (
+                <button onClick={downloadPatternPdf} style={{width:'100%',background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+                  ↓ Download PDF
+                </button>
+              )}
               {isLoggedIn && crossed.size > 0 && (
                 <button onClick={()=>setCrossed(new Set())} style={{width:'100%',background:'transparent',color:'#bbb',border:'1px solid #e8e6e1',borderRadius:8,padding:'8px 0',fontWeight:600,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Reset Progress</button>
               )}
@@ -1388,6 +1454,9 @@ function TimeTablePage({ user }) {
   const [setValues, setSetValues] = useState({});
   const [savingTable, setSavingTable] = useState(null);
   const [message, setMessage] = useState('');
+  const [reportDate, setReportDate] = useState(formatDateInput());
+  const [report, setReport] = useState({ summary:{sessions:0, occupied_seconds:0, charged_seconds:0}, daily_report:[], logs:[] });
+  const [reportLoading, setReportLoading] = useState(false);
 
   const buildTableLink = (tableNumber) => `${window.location.origin}${window.location.pathname}?page=timetable&table=${tableNumber}`;
 
@@ -1411,11 +1480,30 @@ function TimeTablePage({ user }) {
     }
   }, []);
 
+  const loadReport = useCallback(async () => {
+    if (!isAdmin) {
+      setReport({ summary:{sessions:0, occupied_seconds:0, charged_seconds:0}, daily_report:[], logs:[] });
+      return;
+    }
+    setReportLoading(true);
+    try {
+      const res = await apiFetch(`/timetable/report?date=${reportDate}`);
+      const data = res?.ok ? await res.json() : null;
+      if (data) setReport(data);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [isAdmin, reportDate]);
+
   useEffect(() => {
     loadTables();
     const refresh = setInterval(loadTables, 5000);
     return () => clearInterval(refresh);
   }, [loadTables]);
+
+  useEffect(() => {
+    loadReport();
+  }, [loadReport]);
 
   useEffect(() => {
     const clock = setInterval(() => setTick(Date.now()), 1000);
@@ -1429,6 +1517,9 @@ function TimeTablePage({ user }) {
   };
 
   const runTableAction = async (tableNumber, action) => {
+    if (action === 'reset' && !window.confirm(`Reset Table #${tableNumber} timer? This will clear the current time.`)) {
+      return;
+    }
     setSavingTable(tableNumber);
     setMessage('');
     try {
@@ -1438,6 +1529,7 @@ function TimeTablePage({ user }) {
         return;
       }
       await loadTables();
+      if (action !== 'start') await loadReport();
     } finally {
       setSavingTable(null);
     }
@@ -1498,6 +1590,9 @@ function TimeTablePage({ user }) {
     ? tableSlots.filter(table => table.table_number === selectedTable)
     : tableSlots;
   const occupiedCount = tableSlots.filter(table => table.is_running).length;
+  const reportSummary = report?.summary || { sessions:0, occupied_seconds:0, charged_seconds:0 };
+  const dailyRows = report?.daily_report || [];
+  const timeLogs = report?.logs || [];
 
   return (
     <div className="page-shell pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
@@ -1566,8 +1661,14 @@ function TimeTablePage({ user }) {
                 }}>{table.status}</span>
               </div>
 
-              <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:34,letterSpacing:'0',marginBottom:18,color:'#1A1A18'}}>
-                {formatDuration(elapsed)}
+              <div style={{marginBottom:18}}>
+                <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:34,letterSpacing:'0',color:'#1A1A18'}}>
+                  {formatDuration(elapsed)}
+                </div>
+                <div style={{display:'flex',gap:10,flexWrap:'wrap',marginTop:8}}>
+                  <span style={{fontSize:12,color:'#777',fontWeight:700}}>Occupied {formatDuration(elapsed)}</span>
+                  <span style={{fontSize:12,color:T.accentRed,fontWeight:800}}>Charging {formatDuration(calculateChargedSeconds(elapsed))}</span>
+                </div>
               </div>
 
               <div style={{display:'flex',gap:8,marginBottom:isAdmin?16:0}}>
@@ -1663,6 +1764,101 @@ function TimeTablePage({ user }) {
           );
         })}
       </div>
+
+      {isAdmin && (
+      <section style={{marginTop:28,display:'grid',gap:18}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:14,flexWrap:'wrap'}}>
+          <div>
+            <h2 style={{fontSize:24,fontWeight:800,marginBottom:4}}>Daily Report</h2>
+            <p style={{fontSize:13,color:'#888'}}>Saved database logs for completed table sessions.</p>
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <input type="date" value={reportDate} onChange={e=>setReportDate(e.target.value || formatDateInput())} style={{
+              border:'1px solid #E8E6E1',
+              borderRadius:8,
+              padding:'9px 10px',
+              fontFamily:'Space Mono,monospace',
+              fontSize:12,
+              outline:'none'
+            }}/>
+            <button onClick={loadReport} style={{
+              background:'#fff',
+              color:'#555',
+              border:'1px solid #E8E6E1',
+              borderRadius:8,
+              padding:'9px 12px',
+              fontWeight:800,
+              fontSize:12,
+              cursor:'pointer',
+              fontFamily:'inherit'
+            }}>{reportLoading ? 'Loading' : 'Refresh'}</button>
+          </div>
+        </div>
+
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',gap:12}}>
+          {[
+            ['Sessions', reportSummary.sessions || 0],
+            ['Occupied Time', formatDuration(reportSummary.occupied_seconds)],
+            ['Charging Time', formatDuration(reportSummary.charged_seconds)],
+          ].map(([label, value]) => (
+            <div key={label} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'14px 16px'}}>
+              <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:800,marginBottom:6}}>{label}</div>
+              <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:20,color:label === 'Charging Time' ? T.accentRed : '#1A1A18'}}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))',gap:18}}>
+          <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:18}}>
+            <div style={{fontSize:14,fontWeight:800,marginBottom:12}}>Daily Report</div>
+            <div style={{display:'grid',gap:8}}>
+              {dailyRows.length === 0 && (
+                <div style={{fontSize:13,color:'#999',padding:'12px 0'}}>No completed table sessions for this date.</div>
+              )}
+              {dailyRows.map(row => (
+                <div key={row.table_number} style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(92px, 1fr))',gap:10,alignItems:'center',borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                  <div style={{fontWeight:800}}>Table #{row.table_number}</div>
+                  <div>
+                    <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:800}}>Occupied</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:13,fontWeight:700}}>{formatDuration(row.occupied_seconds)}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:800}}>Charging</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:13,fontWeight:700,color:T.accentRed}}>{formatDuration(row.charged_seconds)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:18,overflow:'hidden'}}>
+            <div style={{fontSize:14,fontWeight:800,marginBottom:12}}>Time Log</div>
+            <div style={{display:'grid',gap:8,maxHeight:360,overflow:'auto',paddingRight:4}}>
+              {timeLogs.length === 0 && (
+                <div style={{fontSize:13,color:'#999',padding:'12px 0'}}>No saved logs for this date.</div>
+              )}
+              {timeLogs.map(log => (
+                <div key={log.id} style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(92px, 1fr))',gap:10,alignItems:'center',borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                  <div style={{fontWeight:800}}>#{log.table_number}</div>
+                  <div>
+                    <div style={{fontSize:12,color:'#555',fontWeight:700}}>{formatDateTime(log.started_at)}</div>
+                    <div style={{fontSize:12,color:'#999'}}>to {formatDateTime(log.ended_at)}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:800}}>Occupied</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:12,fontWeight:700}}>{formatDuration(log.occupied_seconds)}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:800}}>Charging</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:12,fontWeight:700,color:T.accentRed}}>{formatDuration(log.charged_seconds)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
       </div>
     </div>
   );
@@ -2494,10 +2690,8 @@ function AdminPage({ onPatternPublished }) {
 
 // ─── LOGIN MODAL ──────────────────────────────────────────────────────────────
 function LoginModal({ onClose, onLogin }) {
-  const [tab, setTab] = useState('login');
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
-  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -2506,11 +2700,7 @@ function LoginModal({ onClose, onLogin }) {
     setLoading(true);
     setError('');
     try {
-      const endpoint = tab === 'login' ? '/auth/login' : '/auth/register';
-      const body = tab === 'login'
-        ? { email, password: pass }
-        : { email, password: pass, name: name.trim() || email.split('@')[0] };
-      const res = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(body) });
+      const res = await apiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ email, password: pass }) });
       if (!res) {
         setError('Cannot reach the server. Run: docker compose up --build');
         return;
@@ -2546,20 +2736,6 @@ function LoginModal({ onClose, onLogin }) {
           <span style={{fontWeight:800,fontSize:18}}><span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span></span>
         </div>
 
-        <div style={{display:'flex',background:'#f2f1ee',borderRadius:10,padding:4,marginBottom:24}}>
-          {['login','signup'].map(t=>(
-            <button key={t} onClick={()=>{setTab(t);setError('');}} style={{flex:1,padding:'8px 0',border:'none',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:13,transition:'all 0.15s',background:tab===t?'#fff':'transparent',color:tab===t?'#1A1A18':'#888',boxShadow:tab===t?'0 1px 4px rgba(0,0,0,0.1)':'none'}}>{t==='login'?'Sign In':'Create Account'}</button>
-          ))}
-        </div>
-
-        {tab === 'signup' && (
-          <div style={{marginBottom:14}}>
-            <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>Name</label>
-            <input type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" style={inputStyle}
-              onFocus={e=>e.target.style.borderColor=T.accentRed} onBlur={e=>e.target.style.borderColor='#e8e6e1'}/>
-          </div>
-        )}
-
         {[{label:'Email',type:'email',value:email,set:setEmail,placeholder:'you@example.com'},{label:'Password',type:'password',value:pass,set:setPass,placeholder:'••••••••'}].map(f=>(
           <div key={f.label} style={{marginBottom:14}}>
             <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>{f.label}</label>
@@ -2580,7 +2756,7 @@ function LoginModal({ onClose, onLogin }) {
           fontWeight:700,fontSize:14,cursor:loading?'default':'pointer',fontFamily:'inherit',transition:'all 0.2s',
           display:'flex',alignItems:'center',justifyContent:'center',gap:8
         }}>
-          {loading ? <><Spinner size={14}/> {tab==='login'?'Signing in…':'Creating account…'}</> : tab==='login'?'Sign In →':'Create Account →'}
+          {loading ? <><Spinner size={14}/> Signing in…</> : 'Sign In →'}
         </button>
 
       </div>
@@ -2688,6 +2864,21 @@ function App() {
     }
   };
 
+  const onDeletePattern = async (id) => {
+    const res = await apiFetch(`/patterns/${id}`, { method: 'DELETE' });
+    if (!res?.ok) {
+      alert('Unable to delete this pattern. Please try again.');
+      return;
+    }
+    setPatterns(prev => prev.filter(p => p.id !== id));
+    setFavIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setOpenPattern(prev => prev?.id === id ? null : prev);
+  };
+
   const onLogin = (userData, token) => {
     localStorage.setItem('pc_token', token);
     setUser(userData);
@@ -2735,7 +2926,7 @@ function App() {
         <OfficialHome setPage={setPage} onLoginClick={() => setShowLogin(true)}/>
       )}
       {page === 'gallery' && (
-        <GalleryPage patterns={patterns} loading={patternsLoading} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user}/>
+        <GalleryPage patterns={patterns} loading={patternsLoading} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user} onPatternDeleted={onDeletePattern}/>
       )}
       {page === 'favorites' && (
         <FavoritesPage patterns={patterns} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user} onLoginClick={() => setShowLogin(true)}/>

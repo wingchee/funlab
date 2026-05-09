@@ -4,6 +4,9 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
@@ -23,6 +26,11 @@ from routers import timetable  # noqa: E402
 
 
 class TableTimerTests(unittest.TestCase):
+    def _session(self):
+        engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        models.Base.metadata.create_all(bind=engine)
+        return sessionmaker(bind=engine)()
+
     def test_stopped_table_serializes_as_free_with_existing_elapsed_time(self):
         timer = models.TableTimer(
             id=1,
@@ -79,3 +87,91 @@ class TableTimerTests(unittest.TestCase):
         self.assertIn("tableSlots.filter(table => table.table_number === selectedTable)", html)
         self.assertIn("visibleTableSlots.map(table =>", html)
         self.assertIn("Only Table", html)
+
+    def test_charge_seconds_rounds_by_first_hour_then_half_hour_grace(self):
+        calculator = getattr(timetable, "calculate_charged_seconds", None)
+        self.assertIsNotNone(calculator, "timetable.calculate_charged_seconds should exist")
+
+        self.assertEqual(calculator(0), 0)
+        self.assertEqual(calculator(1), 3600)
+        self.assertEqual(calculator(3600), 3600)
+        self.assertEqual(calculator(4200), 3600)
+        self.assertEqual(calculator(4201), 5400)
+        self.assertEqual(calculator(6000), 5400)
+        self.assertEqual(calculator(6001), 7200)
+
+    def test_stop_table_persists_completed_time_log_with_charged_seconds(self):
+        self.assertTrue(hasattr(models, "TableTimeLog"), "models.TableTimeLog should exist")
+        db = self._session()
+        now = datetime(2026, 5, 3, 12, 0, 0)
+        timer = models.TableTimer(
+            table_number=1,
+            is_running=True,
+            elapsed_seconds=0,
+            started_at=now - timedelta(seconds=4201),
+        )
+        db.add(timer)
+        db.commit()
+
+        timetable.stop_table(1, _=None, db=db, now=now)
+
+        logs = db.query(models.TableTimeLog).all()
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(logs[0].table_number, 1)
+        self.assertEqual(logs[0].occupied_seconds, 4201)
+        self.assertEqual(logs[0].charged_seconds, 5400)
+
+    def test_daily_report_summarizes_logs_for_requested_day(self):
+        self.assertTrue(hasattr(models, "TableTimeLog"), "models.TableTimeLog should exist")
+        reporter = getattr(timetable, "get_report", None)
+        self.assertIsNotNone(reporter, "timetable.get_report should exist")
+        db = self._session()
+        db.add_all([
+            models.TableTimeLog(
+                table_number=1,
+                started_at=datetime(2026, 5, 3, 10, 0, 0),
+                ended_at=datetime(2026, 5, 3, 11, 10, 1),
+                occupied_seconds=4201,
+                charged_seconds=5400,
+            ),
+            models.TableTimeLog(
+                table_number=2,
+                started_at=datetime(2026, 5, 3, 12, 0, 0),
+                ended_at=datetime(2026, 5, 3, 12, 30, 0),
+                occupied_seconds=1800,
+                charged_seconds=3600,
+            ),
+            models.TableTimeLog(
+                table_number=1,
+                started_at=datetime(2026, 5, 4, 10, 0, 0),
+                ended_at=datetime(2026, 5, 4, 10, 30, 0),
+                occupied_seconds=1800,
+                charged_seconds=3600,
+            ),
+        ])
+        db.commit()
+
+        report = reporter(date="2026-05-03", db=db)
+
+        self.assertEqual(report["date"], "2026-05-03")
+        self.assertEqual(report["summary"]["sessions"], 2)
+        self.assertEqual(report["summary"]["occupied_seconds"], 6001)
+        self.assertEqual(report["summary"]["charged_seconds"], 9000)
+        self.assertEqual(len(report["logs"]), 2)
+        self.assertEqual(report["daily_report"][0]["table_number"], 1)
+        self.assertEqual(report["daily_report"][0]["occupied_seconds"], 4201)
+
+    def test_frontend_renders_time_log_and_daily_report_sections(self):
+        html = (ROOT / "frontend" / "index.html").read_text()
+
+        self.assertIn("loadReport", html)
+        self.assertIn("apiFetch(`/timetable/report?date=${reportDate}`)", html)
+        self.assertIn("Time Log", html)
+        self.assertIn("Charging Time", html)
+        self.assertIn("Daily Report", html)
+
+    def test_frontend_confirms_before_resetting_table_timer(self):
+        html = (ROOT / "frontend" / "index.html").read_text()
+
+        self.assertIn("window.confirm(`Reset Table #${tableNumber} timer?", html)
+        self.assertIn("if (action === 'reset'", html)

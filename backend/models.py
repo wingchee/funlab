@@ -48,3 +48,14 @@ class TableTimer(Base):
     elapsed_seconds = Column(Integer, default=0, nullable=False)
     started_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class TableTimeLog(Base):
+    __tablename__ = "table_time_logs"
+    id = Column(Integer, primary_key=True)
+    table_number = Column(Integer, nullable=False, index=True)
+    started_at = Column(DateTime, nullable=False, index=True)
+    ended_at = Column(DateTime, nullable=False, index=True)
+    occupied_seconds = Column(Integer, default=0, nullable=False)
+    charged_seconds = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())

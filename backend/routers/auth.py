@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
-from auth import hash_password, verify_password, create_token, get_current_user
+from auth import verify_password, create_token, get_current_user
 from database import get_db
 
 router = APIRouter()
@@ -14,21 +14,11 @@ def _user_dict(user: models.User) -> dict:
 
 
 @router.post("/register")
-def register(body: schemas.UserCreate, db: Session = Depends(get_db)):
-    if db.query(models.User).filter(models.User.email == body.email).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-    name = body.name.strip() or body.email.split("@")[0]
-    is_admin = "admin" in body.email.lower()
-    user = models.User(
-        email=body.email,
-        password_hash=hash_password(body.password),
-        name=name,
-        is_admin=is_admin,
+def register(_body: schemas.UserCreate, _db: Session = Depends(get_db)):
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Registration is temporarily disabled",
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return {"access_token": create_token(user.id), "token_type": "bearer", "user": _user_dict(user)}
 
 
 @router.post("/login")

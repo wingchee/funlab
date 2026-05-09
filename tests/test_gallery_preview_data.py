@@ -12,12 +12,20 @@ if str(BACKEND) not in sys.path:
 
 auth_stub = types.ModuleType("auth")
 auth_stub.get_current_user = lambda: None
+auth_stub.hash_password = lambda password: f"hashed-{password}"
+auth_stub.verify_password = lambda plain, hashed: True
+auth_stub.create_token = lambda user_id: f"token-{user_id}"
 if "auth" in sys.modules:
     setattr(sys.modules["auth"], "get_current_user", lambda: None)
+    setattr(sys.modules["auth"], "hash_password", lambda password: f"hashed-{password}")
+    setattr(sys.modules["auth"], "verify_password", lambda plain, hashed: True)
+    setattr(sys.modules["auth"], "create_token", lambda user_id: f"token-{user_id}")
 else:
     sys.modules["auth"] = auth_stub
 
 import models  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
+from routers import auth as auth_router  # noqa: E402
 from routers import favorites, patterns  # noqa: E402
 
 
@@ -90,3 +98,28 @@ class GalleryPreviewDataTests(unittest.TestCase):
         self.assertIn("const downloadPatternPdf = () =>", html)
         self.assertIn("pdfWindow.print();", html)
         self.assertIn("onClick={downloadPatternPdf}", html)
+
+    def test_registration_is_temporarily_disabled(self):
+        html = (ROOT / "frontend" / "index.html").read_text()
+
+        self.assertNotIn("/auth/register", html)
+        self.assertNotIn("Create Account", html)
+        with self.assertRaises(HTTPException) as ctx:
+            auth_router.register(None, None)
+        self.assertEqual(ctx.exception.status_code, 410)
+
+    def test_admin_gallery_delete_has_confirmation_and_reload_hook(self):
+        html = (ROOT / "frontend" / "index.html").read_text()
+
+        self.assertIn("function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn, isAdmin, onDelete })", html)
+        self.assertIn("window.confirm(`Delete ${pattern.title}? This cannot be undone.`)", html)
+        self.assertIn("apiFetch(`/patterns/${id}`", html)
+        self.assertIn("method: 'DELETE'", html)
+        self.assertIn("onPatternDeleted={onDeletePattern}", html)
+
+    def test_pdf_download_is_visible_to_admin_only(self):
+        html = (ROOT / "frontend" / "index.html").read_text()
+
+        self.assertIn("const isAdmin = !!user?.is_admin;", html)
+        self.assertIn("{isAdmin && (", html)
+        self.assertLess(html.index("{isAdmin && ("), html.index("↓ Download PDF"))
