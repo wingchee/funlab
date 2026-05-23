@@ -103,6 +103,12 @@ class TableTimerTests(unittest.TestCase):
         self.assertIn("tableSlots.filter(table => table.table_number === selectedTable)", html)
         self.assertIn("visibleTableSlots.map(table =>", html)
         self.assertIn("Only Table", html)
+        self.assertIn("number >= 1 && number <= 14 ? number : null", html)
+
+    def test_frontend_occupied_count_uses_fourteen_tables(self):
+        html = (ROOT / "frontend" / "index.html").read_text()
+
+        self.assertIn("{occupiedCount}/14", html)
 
     def test_charge_seconds_rounds_by_first_hour_then_half_hour_grace(self):
         calculator = getattr(timetable, "calculate_charged_seconds", None)

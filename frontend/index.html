@@ -1449,7 +1449,7 @@ function TimeTablePage({ user }) {
   const [tick, setTick] = useState(Date.now());
   const [selectedTable, setSelectedTable] = useState(() => {
     const number = Number(new URLSearchParams(window.location.search).get('table'));
-    return Number.isInteger(number) && number >= 1 && number <= 8 ? number : null;
+    return Number.isInteger(number) && number >= 1 && number <= 14 ? number : null;
   });
   const [setValues, setSetValues] = useState({});
   const [savingTable, setSavingTable] = useState(null);
@@ -1610,7 +1610,7 @@ function TimeTablePage({ user }) {
           {!isIndividualTablePage && (
             <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px'}}>
               <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:700}}>Occupied</div>
-              <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:20,color:T.accentRed}}>{occupiedCount}/8</div>
+              <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:20,color:T.accentRed}}>{occupiedCount}/14</div>
             </div>
           )}
           {isIndividualTablePage && (
