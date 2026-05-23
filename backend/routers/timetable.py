@@ -10,7 +10,7 @@ from auth import get_admin_user
 from database import get_db
 
 router = APIRouter()
-TABLE_COUNT = 8
+TABLE_COUNT = 14
 FIRST_HOUR_SECONDS = 60 * 60
 HALF_HOUR_SECONDS = 30 * 60
 GRACE_SECONDS = 10 * 60

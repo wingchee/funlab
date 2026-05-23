@@ -76,8 +76,24 @@ class TableTimerTests(unittest.TestCase):
         self.assertIn("function TimeTablePage", html)
         self.assertIn("apiFetch('/timetable')", html)
         self.assertIn("copyTableLink", html)
-        self.assertIn("Array.from({length: 8}", html)
+        self.assertIn("Array.from({length: 14}", html)
         self.assertIn("page === 'timetable'", html)
+
+    def test_backend_creates_fourteen_table_timers(self):
+        db = self._session()
+
+        timetable._ensure_table_timers(db)
+
+        rows = db.query(models.TableTimer).order_by(models.TableTimer.table_number.asc()).all()
+        self.assertEqual([row.table_number for row in rows], list(range(1, 15)))
+
+    def test_table_fifteen_is_not_available(self):
+        db = self._session()
+
+        with self.assertRaises(Exception) as raised:
+            timetable._get_table(db, 15)
+
+        self.assertEqual(getattr(raised.exception, "status_code", None), 404)
 
     def test_frontend_table_query_renders_only_that_table(self):
         html = (ROOT / "frontend" / "index.html").read_text()
