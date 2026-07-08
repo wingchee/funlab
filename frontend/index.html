@@ -1535,6 +1535,26 @@ function TimeTablePage({ user }) {
     }
   };
 
+  async function resetAllTables() {
+    if (!window.confirm('Reset all table timers? This will clear every table timer.')) {
+      return;
+    }
+    setSavingTable('all');
+    setMessage('');
+    try {
+      const res = await apiFetch('/timetable/reset-all', { method: 'POST' });
+      if (!res?.ok) {
+        setMessage('Unable to reset all table timers.');
+        return;
+      }
+      await loadTables();
+      await loadReport();
+      setMessage('All table timers reset.');
+    } finally {
+      setSavingTable(null);
+    }
+  }
+
   const setTableTime = async (table) => {
     const tableNumber = table.table_number;
     setSavingTable(tableNumber);
@@ -1621,6 +1641,11 @@ function TimeTablePage({ user }) {
           <button onClick={loadTables} style={{background:'#fff',color:'#555',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
             {loading ? 'Loading...' : 'Refresh'}
           </button>
+          {isAdmin && (
+            <button onClick={resetAllTables} disabled={savingTable === 'all'} style={{background:savingTable === 'all'?'#e8e6e1':T.accentRed,color:savingTable === 'all'?'#aaa':'#fff',border:'none',borderRadius:8,padding:'10px 14px',fontWeight:800,fontSize:13,cursor:savingTable === 'all'?'default':'pointer',fontFamily:'inherit'}}>
+              {savingTable === 'all' ? 'Resetting...' : 'Reset All Timers'}
+            </button>
+          )}
         </div>
       </div>
 

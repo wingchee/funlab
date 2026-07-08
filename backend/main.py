@@ -55,5 +55,5 @@ if _FRONTEND_DIR.is_dir():
         return FileResponse(_FRONTEND_DIR / "funlab-logo.jpeg", media_type="image/jpeg")
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    def _spa(_: str):
+    def _spa(full_path: str):
         return FileResponse(_FRONTEND_DIR / "index.html", media_type="text/html")

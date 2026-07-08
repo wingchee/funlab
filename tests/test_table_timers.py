@@ -110,6 +110,41 @@ class TableTimerTests(unittest.TestCase):
 
         self.assertIn("{occupiedCount}/14", html)
 
+    def test_reset_all_tables_clears_every_timer_and_logs_running_tables(self):
+        reset_all = getattr(timetable, "reset_all_tables", None)
+        self.assertIsNotNone(reset_all, "timetable.reset_all_tables should exist")
+        db = self._session()
+        now = datetime(2026, 5, 3, 12, 0, 0)
+        db.add_all([
+            models.TableTimer(
+                table_number=1,
+                is_running=True,
+                elapsed_seconds=120,
+                started_at=now - timedelta(seconds=300),
+            ),
+            models.TableTimer(
+                table_number=2,
+                is_running=False,
+                elapsed_seconds=900,
+                started_at=None,
+            ),
+        ])
+        db.commit()
+
+        payload = reset_all(_=None, db=db, now=now)
+
+        rows = db.query(models.TableTimer).order_by(models.TableTimer.table_number.asc()).all()
+        self.assertEqual([row.table_number for row in rows], list(range(1, 15)))
+        self.assertTrue(all(not row.is_running for row in rows))
+        self.assertTrue(all(row.elapsed_seconds == 0 for row in rows))
+        self.assertTrue(all(row.started_at is None for row in rows))
+        self.assertEqual(len(payload), 14)
+
+        logs = db.query(models.TableTimeLog).all()
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(logs[0].table_number, 1)
+        self.assertEqual(logs[0].occupied_seconds, 300)
+
     def test_charge_seconds_rounds_by_first_hour_then_half_hour_grace(self):
         calculator = getattr(timetable, "calculate_charged_seconds", None)
         self.assertIsNotNone(calculator, "timetable.calculate_charged_seconds should exist")
@@ -197,3 +232,11 @@ class TableTimerTests(unittest.TestCase):
 
         self.assertIn("window.confirm(`Reset Table #${tableNumber} timer?", html)
         self.assertIn("if (action === 'reset'", html)
+
+    def test_frontend_confirms_before_resetting_all_table_timers(self):
+        html = (ROOT / "frontend" / "index.html").read_text()
+
+        self.assertIn("function resetAllTables", html)
+        self.assertIn("window.confirm('Reset all table timers?", html)
+        self.assertIn("apiFetch('/timetable/reset-all', { method: 'POST' })", html)
+        self.assertIn("Reset All Timers", html)

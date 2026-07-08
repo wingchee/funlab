@@ -122,6 +122,19 @@ def _get_table(db: Session, table_number: int) -> models.TableTimer:
     return timer
 
 
+def _reset_timer(timer: models.TableTimer, db: Session, current: datetime) -> None:
+    if timer.is_running:
+        run_seconds = (
+            max(0, int((current - timer.started_at).total_seconds()))
+            if timer.started_at
+            else _current_elapsed_seconds(timer, current)
+        )
+        _record_time_log(db, timer, timer.started_at, current, run_seconds)
+    timer.elapsed_seconds = 0
+    timer.is_running = False
+    timer.started_at = None
+
+
 @router.get("")
 def list_tables(db: Session = Depends(get_db)):
     _ensure_table_timers(db)
@@ -165,6 +178,21 @@ def get_report(
         "daily_report": [per_table[key] for key in sorted(per_table)],
         "logs": [_serialize_log(log) for log in logs],
     }
+
+
+@router.post("/reset-all")
+def reset_all_tables(
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+    now: Optional[datetime] = None,
+):
+    _ensure_table_timers(db)
+    current = now or datetime.utcnow()
+    rows = db.query(models.TableTimer).order_by(models.TableTimer.table_number.asc()).all()
+    for timer in rows:
+        _reset_timer(timer, db, current)
+    db.commit()
+    return [_serialize(row, now=current) for row in rows]
 
 
 @router.get("/{table_number}")
@@ -219,20 +247,11 @@ def reset_table(
     now: Optional[datetime] = None,
 ):
     timer = _get_table(db, table_number)
-    if timer.is_running:
-        current = now or datetime.utcnow()
-        run_seconds = (
-            max(0, int((current - timer.started_at).total_seconds()))
-            if timer.started_at
-            else _current_elapsed_seconds(timer, current)
-        )
-        _record_time_log(db, timer, timer.started_at, current, run_seconds)
-    timer.elapsed_seconds = 0
-    timer.is_running = False
-    timer.started_at = None
+    current = now or datetime.utcnow()
+    _reset_timer(timer, db, current)
     db.commit()
     db.refresh(timer)
-    return _serialize(timer, now=datetime.utcnow())
+    return _serialize(timer, now=current)
 
 
 @router.put("/{table_number}")
