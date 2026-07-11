@@ -67,6 +67,25 @@ def test_existing_admin_logs_in_with_email_and_has_no_membership(db):
     assert result["user"]["member_code"] is None
 
 
+def test_preserved_space_padded_mixed_case_email_logs_in_normalized(db):
+    admin = models.User(
+        email=" Admin@Example.COM ",
+        password_hash=hash_password("admin-pass"),
+        name="Admin",
+        is_admin=True,
+    )
+    db.add(admin)
+    db.commit()
+
+    result = auth_router.login(
+        schemas.AccountLogin(identifier="admin@example.com", password="admin-pass"),
+        db=db,
+    )
+
+    assert result["user"]["id"] == admin.id
+    assert admin.email == " Admin@Example.COM "
+
+
 def test_member_registration_uses_users_bcrypt_and_unified_jwt(db):
     result = auth_router.register(
         schemas.MemberRegistration(

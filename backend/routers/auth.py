@@ -1,7 +1,7 @@
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -91,7 +91,7 @@ def login(body: schemas.AccountLogin, db: Session = Depends(get_db)):
         db.query(models.User)
         .filter(
             or_(
-                models.User.email.ilike(normalize_email(identifier)),
+                func.lower(func.trim(models.User.email)) == normalize_email(identifier),
                 models.User.phone == normalize_phone(identifier),
                 models.User.member_code.ilike(identifier),
             ),
