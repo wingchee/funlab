@@ -1,6 +1,7 @@
 import sys
-import types
+import os
 import unittest
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -10,15 +11,9 @@ from sqlalchemy.orm import sessionmaker
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
+os.environ.setdefault("APP_ENV", "test")
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
-
-auth_stub = types.ModuleType("auth")
-auth_stub.get_admin_user = lambda: None
-if "auth" in sys.modules:
-    setattr(sys.modules["auth"], "get_admin_user", lambda: None)
-else:
-    sys.modules["auth"] = auth_stub
 
 import models  # noqa: E402
 import schemas  # noqa: E402
@@ -86,6 +81,35 @@ class TableTimerTests(unittest.TestCase):
 
         rows = db.query(models.TableTimer).order_by(models.TableTimer.table_number.asc()).all()
         self.assertEqual([row.table_number for row in rows], list(range(1, 15)))
+
+    def test_duplicate_timer_seed_attempts_are_conflict_safe_on_sqlite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            engine = create_engine(
+                f"sqlite:///{Path(directory) / 'timer-seed.db'}",
+                connect_args={"check_same_thread": False},
+            )
+            models.Base.metadata.create_all(bind=engine)
+            Session = sessionmaker(bind=engine)
+            first_db = Session()
+            second_db = Session()
+            table_numbers = list(range(1, 15))
+
+            timetable._insert_missing_table_timers(first_db, table_numbers)
+            timetable._insert_missing_table_timers(second_db, table_numbers)
+
+            rows = second_db.query(models.TableTimer.table_number).all()
+            self.assertEqual(sorted(row.table_number for row in rows), table_numbers)
+            first_db.close()
+            second_db.close()
+
+    def test_reset_all_query_locks_every_timer_before_settlement(self):
+        db = self._session()
+        timetable._ensure_table_timers(db)
+
+        query = timetable._all_timers_for_update(db)
+
+        self.assertIsNotNone(query._for_update_arg)
+        self.assertIn("table_number", str(query._order_by_clauses[0]))
 
     def test_table_fifteen_is_not_available(self):
         db = self._session()

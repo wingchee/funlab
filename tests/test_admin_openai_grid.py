@@ -1,8 +1,8 @@
 import asyncio
 import json
+import os
 import tempfile
 import sys
-import types
 import unittest
 from pathlib import Path
 
@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
+os.environ.setdefault("APP_ENV", "test")
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
@@ -21,10 +22,6 @@ import models  # noqa: E402
 import schemas  # noqa: E402
 from database import Base  # noqa: E402
 from openai_grid import normalize_openai_grid  # noqa: E402
-
-auth_stub = types.ModuleType("auth")
-auth_stub.get_admin_user = lambda: None
-sys.modules.setdefault("auth", auth_stub)
 
 import routers.admin as admin_router  # noqa: E402
 from routers.admin import publish_pattern  # noqa: E402

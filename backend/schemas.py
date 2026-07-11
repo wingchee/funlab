@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Any
+from typing import List, Any, Optional
 
 
 class UserCreate(BaseModel):
@@ -8,8 +8,8 @@ class UserCreate(BaseModel):
     name: str = ""
 
 
-class UserLogin(BaseModel):
-    email: str
+class AccountLogin(BaseModel):
+    identifier: str
     password: str
 
 
@@ -23,3 +23,48 @@ class PublishRequest(BaseModel):
 class TableTimerSetRequest(BaseModel):
     elapsed_seconds: int
     is_running: bool = False
+
+
+class TableTimerStartRequest(BaseModel):
+    member_code: str = ""
+
+
+class TableMemberAttachRequest(BaseModel):
+    member_code: str = ""
+
+
+class MemberCreate(BaseModel):
+    name: str
+    phone: str
+    password: str = ""
+    notes: str = ""
+
+
+class MemberRegistration(BaseModel):
+    email: str
+    name: str
+    phone: str
+    password: str
+    password_confirmation: str
+
+
+class MemberUpdate(BaseModel):
+    email: str = ""
+    name: str = ""
+    phone: str = ""
+    password: str = ""
+    is_active: Optional[bool] = None
+    notes: str = ""
+
+
+class MemberPackageCreate(BaseModel):
+    package_name: str = "10-hour package"
+    total_seconds: int = 10 * 60 * 60
+    notes: str = ""
+
+
+class MemberPackageUpdate(BaseModel):
+    package_name: str = ""
+    remaining_seconds: Optional[int] = None
+    total_seconds: Optional[int] = None
+    notes: str = ""
