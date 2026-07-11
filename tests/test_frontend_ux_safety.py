@@ -110,3 +110,27 @@ def test_admin_and_membership_capabilities_are_independent():
     assert "const hasMembership = !!user?.member_code" in html
     assert "if (!hasMembership)" in html
     assert "if (!user)" in html
+
+
+def test_member_portal_ignores_stale_account_responses():
+    html = read_frontend()
+
+    assert "const memberLoadGenerationRef = useRef(0)" in html
+    assert "const currentAccountIdRef = useRef(user?.id)" in html
+    assert "currentAccountIdRef.current = user?.id" in html
+    assert "memberLoadGenerationRef.current === generation" in html
+    assert "currentAccountIdRef.current === accountId" in html
+    assert "const generation = ++memberLoadGenerationRef.current" in html
+    assert "memberLoadGenerationRef.current += 1" in html
+    assert "const logout = () =>" in html
+    assert html.count("if (!isCurrentLoad()) return") >= 5
+
+
+def test_member_portal_revokes_latest_qr_url_on_unmount():
+    html = read_frontend()
+
+    assert "const qrUrlRef = useRef('')" in html
+    assert "qrUrlRef.current = nextUrl" in html
+    assert "return () => {" in html
+    assert "URL.revokeObjectURL(qrUrlRef.current)" in html
+    assert "qrUrlRef.current = ''" in html

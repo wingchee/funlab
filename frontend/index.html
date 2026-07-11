@@ -3452,39 +3452,86 @@ function MemberPortalPage({ user, embedded = false, onLogout } = {}) {
   const [packages, setPackages] = useState([]);
   const [visits, setVisits] = useState([]);
   const [qrUrl, setQrUrl] = useState('');
+  const memberLoadGenerationRef = useRef(0);
+  const currentAccountIdRef = useRef(user?.id);
+  const qrUrlRef = useRef('');
+  currentAccountIdRef.current = user?.id;
 
-  const loadMemberData = useCallback(async () => {
-    if (!hasMembership) return;
+  const replaceQrUrl = useCallback(nextUrl => {
+    if (qrUrlRef.current && qrUrlRef.current !== nextUrl) {
+      URL.revokeObjectURL(qrUrlRef.current);
+    }
+    qrUrlRef.current = nextUrl;
+    setQrUrl(nextUrl);
+  }, []);
+
+  const loadMemberData = useCallback(async (accountId, generation) => {
+    const isCurrentLoad = () => (
+      memberLoadGenerationRef.current === generation
+      && currentAccountIdRef.current === accountId
+    );
     const me = await apiFetch('/members/me');
     if (!me?.ok) return;
     const profile = await me.json();
+    if (!isCurrentLoad()) return;
     setMember(profile);
     const [packageRes, visitRes, qrRes] = await Promise.all([
       apiFetch('/members/me/packages'),
       apiFetch('/members/me/visits'),
       apiFetch('/members/me/qr'),
     ]);
-    if (packageRes?.ok) setPackages(await packageRes.json());
-    if (visitRes?.ok) setVisits(await visitRes.json());
-    if (qrRes?.ok) {
-      const blob = await qrRes.blob();
-      setQrUrl(prev => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(blob);
-      });
+    if (!isCurrentLoad()) return;
+    const [packageData, visitData, qrBlob] = await Promise.all([
+      packageRes?.ok ? packageRes.json() : null,
+      visitRes?.ok ? visitRes.json() : null,
+      qrRes?.ok ? qrRes.blob() : null,
+    ]);
+    if (packageData !== null) {
+      if (!isCurrentLoad()) return;
+      setPackages(packageData);
     }
-  }, [hasMembership]);
+    if (visitData !== null) {
+      if (!isCurrentLoad()) return;
+      setVisits(visitData);
+    }
+    if (qrBlob) {
+      if (!isCurrentLoad()) return;
+      const nextQrUrl = URL.createObjectURL(qrBlob);
+      if (!isCurrentLoad()) {
+        URL.revokeObjectURL(nextQrUrl);
+        return;
+      }
+      replaceQrUrl(nextQrUrl);
+    }
+  }, [replaceQrUrl]);
 
   useEffect(() => {
+    return () => {
+      memberLoadGenerationRef.current += 1;
+      if (qrUrlRef.current) URL.revokeObjectURL(qrUrlRef.current);
+      qrUrlRef.current = '';
+    };
+  }, []);
+
+  useEffect(() => {
+    const accountId = user?.id;
+    const generation = ++memberLoadGenerationRef.current;
     setMember(null);
     setPackages([]);
     setVisits([]);
-    setQrUrl(prev => {
-      if (prev) URL.revokeObjectURL(prev);
-      return '';
-    });
-    if (hasMembership) loadMemberData();
-  }, [hasMembership, loadMemberData, user?.id]);
+    replaceQrUrl('');
+    if (hasMembership && accountId) loadMemberData(accountId, generation);
+    return () => {
+      if (memberLoadGenerationRef.current === generation) {
+        memberLoadGenerationRef.current += 1;
+      }
+    };
+  }, [hasMembership, loadMemberData, replaceQrUrl, user?.id]);
+
+  const logout = () => {
+    memberLoadGenerationRef.current += 1;
+    onLogout?.();
+  };
 
   const membershipStatus = () => {
     if (!user) {
@@ -3532,7 +3579,7 @@ function MemberPortalPage({ user, embedded = false, onLogout } = {}) {
                 <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#B95B6B',fontWeight:800}}>Remaining Hours</div>
                 <div style={{fontFamily:'Space Mono,monospace',fontSize:28,fontWeight:800,color:T.accentRed}}>{formatHours(member.remaining_seconds)}</div>
               </div>
-              <button onClick={onLogout} style={{background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'10px 16px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Sign out</button>
+              <button onClick={logout} style={{background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'10px 16px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Sign out</button>
             </aside>
 
             <section style={{display:'grid',gap:18}}>
