@@ -11,7 +11,6 @@ import models
 import schemas
 from auth import get_admin_user, get_membership_user, hash_password, normalize_email, normalize_phone
 from database import get_db
-from routers import auth as account_auth
 
 router = APIRouter()
 
@@ -256,21 +255,6 @@ def _qr_png_bytes(value: str) -> bytes:
 
 def _member_qr_response(member: models.User) -> Response:
     return Response(content=_qr_png_bytes(member.member_code), media_type="image/png")
-
-
-def _legacy_auth_payload(result: dict) -> dict:
-    """Temporary response shim for the legacy frontend; remove with its routes."""
-    return {**result, "member": result["user"]}
-
-
-@router.post("/register")
-def register_member(body: schemas.MemberRegistration, db: Session = Depends(get_db)):
-    return _legacy_auth_payload(account_auth.register(body, db))
-
-
-@router.post("/login")
-def login_member(body: schemas.AccountLogin, db: Session = Depends(get_db)):
-    return _legacy_auth_payload(account_auth.login(body, db))
 
 
 @router.get("/me")

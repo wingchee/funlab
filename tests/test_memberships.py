@@ -60,36 +60,14 @@ class MembershipTests(unittest.TestCase):
         db.refresh(member)
         return member
 
-    def test_membership_routes_have_only_temporary_unified_auth_aliases(self):
+    def test_membership_routes_do_not_expose_auth_aliases(self):
         source = (BACKEND / "routers" / "memberships.py").read_text()
-        self.assertIn('@router.post("/register")', source)
-        self.assertIn('@router.post("/login")', source)
+        self.assertNotIn('@router.post("/register")', source)
+        self.assertNotIn('@router.post("/login")', source)
+        self.assertNotIn("def register_member", source)
+        self.assertNotIn("def login_member", source)
         self.assertNotIn("member_auth", source)
         self.assertNotRegex(source, r"models\.Member\b")
-
-    def test_compatibility_auth_aliases_delegate_to_unified_users(self):
-        db = self._session()
-        memberships = self._memberships()
-
-        registered = memberships.register_member(
-            schemas.MemberRegistration(
-                email="alias@example.com",
-                name="Alias",
-                phone="+60 12-345 6789",
-                password="member-pass",
-                password_confirmation="member-pass",
-            ),
-            db=db,
-        )
-        user = db.query(models.User).filter_by(email="alias@example.com").one()
-        self.assertEqual(registered["member"]["id"], user.id)
-
-        logged_in = memberships.login_member(
-            schemas.AccountLogin(identifier=user.member_code, password="member-pass"),
-            db=db,
-        )
-        self.assertEqual(logged_in["member"]["id"], user.id)
-        self.assertEqual(logged_in["access_token"].count("."), 2)
 
     def test_member_code_is_searchable_by_name_email_phone_or_code(self):
         db = self._session()
