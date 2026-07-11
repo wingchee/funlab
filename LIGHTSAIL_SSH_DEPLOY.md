@@ -26,13 +26,17 @@ ssh ubuntu@YOUR_LIGHTSAIL_PUBLIC_IP
 Run the deploy script from your repository:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_ACCOUNT/YOUR_REPO/main/scripts/deploy_lightsail_ubuntu.sh | sudo REPO_URL=https://github.com/YOUR_ACCOUNT/YOUR_REPO.git bash
+REPO_BRANCH=main
+curl -fsSL "https://raw.githubusercontent.com/YOUR_ACCOUNT/YOUR_REPO/${REPO_BRANCH}/scripts/deploy_lightsail_ubuntu.sh" \
+  | sudo env REPO_URL=https://github.com/YOUR_ACCOUNT/YOUR_REPO.git REPO_BRANCH="${REPO_BRANCH}" APP_DIR=/opt/pixelcraft COMPOSE_PROJECT_NAME=pixelcraft bash
 ```
 
 Optional values:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_ACCOUNT/YOUR_REPO/main/scripts/deploy_lightsail_ubuntu.sh | sudo REPO_URL=https://github.com/YOUR_ACCOUNT/YOUR_REPO.git REPO_BRANCH=main PORT=80 OPENAI_API_KEY=your_key_here bash
+REPO_BRANCH=main
+curl -fsSL "https://raw.githubusercontent.com/YOUR_ACCOUNT/YOUR_REPO/${REPO_BRANCH}/scripts/deploy_lightsail_ubuntu.sh" \
+  | sudo env REPO_URL=https://github.com/YOUR_ACCOUNT/YOUR_REPO.git REPO_BRANCH="${REPO_BRANCH}" APP_DIR=/opt/pixelcraft COMPOSE_PROJECT_NAME=pixelcraft PORT=80 OPENAI_API_KEY=your_key_here bash
 ```
 
 The script installs Docker, clones or updates the repo in `/opt/pixelcraft`, prepares `.env`, starts Docker Compose, and verifies the app locally.
@@ -86,10 +90,14 @@ http://YOUR_LIGHTSAIL_PUBLIC_IP
 
 ```bash
 ssh ubuntu@YOUR_LIGHTSAIL_PUBLIC_IP
-sudo /opt/pixelcraft/scripts/deploy_lightsail_ubuntu.sh
+REPO_BRANCH=main
+curl -fsSL "https://raw.githubusercontent.com/YOUR_ACCOUNT/YOUR_REPO/${REPO_BRANCH}/scripts/deploy_lightsail_ubuntu.sh" \
+  | sudo env REPO_URL=https://github.com/YOUR_ACCOUNT/YOUR_REPO.git REPO_BRANCH="${REPO_BRANCH}" APP_DIR=/opt/pixelcraft COMPOSE_PROJECT_NAME=pixelcraft bash
 ```
 
-The redeploy path runs `git pull --ff-only`, rebuilds containers, and keeps Docker volumes plus `.env`.
+Fetching the script from the requested branch guarantees that the rollout starts with
+the new deployment safeguards. The script runs `git pull --ff-only`, re-executes the
+checked-out copy once, rebuilds containers, and keeps Docker volumes plus `.env`.
 
 ## 6. Troubleshooting
 

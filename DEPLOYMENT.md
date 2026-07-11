@@ -61,6 +61,15 @@ For an already-created Amazon Lightsail Ubuntu instance, use the SSH deploy guid
 - `LIGHTSAIL_SSH_DEPLOY.md`
 - `scripts/deploy_lightsail_ubuntu.sh`
 
+Start every public-repository rollout with the fresh raw script from the requested
+branch (the checked-out script re-executes itself once after pulling):
+
+```bash
+REPO_BRANCH=main
+curl -fsSL "https://raw.githubusercontent.com/YOUR_ACCOUNT/YOUR_REPO/${REPO_BRANCH}/scripts/deploy_lightsail_ubuntu.sh" \
+  | sudo env REPO_URL=https://github.com/YOUR_ACCOUNT/YOUR_REPO.git REPO_BRANCH="${REPO_BRANCH}" APP_DIR=/opt/pixelcraft COMPOSE_PROJECT_NAME=pixelcraft bash
+```
+
 ### 1. Set a secure secret key
 
 ```bash

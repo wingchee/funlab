@@ -3,7 +3,8 @@ set -Eeuo pipefail
 
 # Run this on an existing Amazon Lightsail Ubuntu instance.
 # Public repo:
-#   curl -fsSL https://raw.githubusercontent.com/YOUR_ACCOUNT/YOUR_REPO/main/scripts/deploy_lightsail_ubuntu.sh | sudo REPO_URL=https://github.com/YOUR_ACCOUNT/YOUR_REPO.git bash
+#   REPO_BRANCH=main
+#   curl -fsSL "https://raw.githubusercontent.com/YOUR_ACCOUNT/YOUR_REPO/${REPO_BRANCH}/scripts/deploy_lightsail_ubuntu.sh" | sudo env REPO_URL=https://github.com/YOUR_ACCOUNT/YOUR_REPO.git REPO_BRANCH="${REPO_BRANCH}" APP_DIR=/opt/pixelcraft COMPOSE_PROJECT_NAME=pixelcraft bash
 # Private repo:
 #   git clone git@github.com:YOUR_ACCOUNT/YOUR_REPO.git /opt/pixelcraft
 #   sudo APP_DIR=/opt/pixelcraft /opt/pixelcraft/scripts/deploy_lightsail_ubuntu.sh
@@ -19,7 +20,8 @@ SKIP_DOCKER_INSTALL="${SKIP_DOCKER_INSTALL:-false}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 LOG_FILE="${LOG_FILE:-/var/log/pixelcraft-lightsail-deploy.log}"
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+if [[ ( -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]}" == "$0" ) \
+  && "${PIXELCRAFT_REEXECUTED:-false}" != "true" ]]; then
   if [[ "${EUID}" -eq 0 ]]; then
     exec > >(tee -a "${LOG_FILE}") 2>&1
   else
@@ -95,6 +97,45 @@ install_docker() {
   sudo_cmd systemctl enable --now docker
 }
 
+reexec_with_fresh_script() {
+  if [[ "${PIXELCRAFT_REEXECUTED:-false}" == "true" ]]; then
+    log "Freshly pulled deployment script is active; skipping re-exec"
+    return
+  fi
+
+  local fresh_script="${APP_DIR}/scripts/deploy_lightsail_ubuntu.sh"
+  [[ -f "${fresh_script}" ]] || fail "Fresh deployment script is missing at ${fresh_script}."
+
+  log "Re-executing the freshly pulled deployment script"
+  local -a preserved_environment=(
+    "PIXELCRAFT_REEXECUTED=true"
+    "REPO_URL=${REPO_URL}"
+    "REPO_BRANCH=${REPO_BRANCH}"
+    "APP_DIR=${APP_DIR}"
+    "ENV_FILE=${ENV_FILE}"
+    "PORT=${PORT}"
+    "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
+    "ENABLE_UFW=${ENABLE_UFW}"
+    "SKIP_DOCKER_INSTALL=${SKIP_DOCKER_INSTALL}"
+    "LOG_FILE=${LOG_FILE}"
+    "OPENAI_API_KEY=${OPENAI_API_KEY}"
+    "OPENAI_BASE_URL=${OPENAI_BASE_URL:-}"
+    "OPENAI_IMAGE_MODEL=${OPENAI_IMAGE_MODEL:-}"
+    "OPENAI_IMAGE_SIZE=${OPENAI_IMAGE_SIZE:-}"
+    "OPENAI_IMAGE_QUALITY=${OPENAI_IMAGE_QUALITY:-}"
+    "OPENAI_IMAGE_MODERATION=${OPENAI_IMAGE_MODERATION:-}"
+    "OPENAI_GRID_MODEL=${OPENAI_GRID_MODEL:-}"
+    "OPENAI_GRID_MAX_OUTPUT_TOKENS=${OPENAI_GRID_MAX_OUTPUT_TOKENS:-}"
+    "OPENAI_REQUEST_TIMEOUT=${OPENAI_REQUEST_TIMEOUT:-}"
+  )
+
+  if [[ "${EUID}" -eq 0 ]]; then
+    exec env "${preserved_environment[@]}" bash "${fresh_script}"
+  else
+    exec sudo env "${preserved_environment[@]}" bash "${fresh_script}"
+  fi
+}
+
 fetch_or_update_project() {
   if [[ -f "${APP_DIR}/docker-compose.yml" ]]; then
     log "Updating existing PixelCraft checkout at ${APP_DIR}"
@@ -102,6 +143,7 @@ fetch_or_update_project() {
     cd "${APP_DIR}"
     sudo_cmd git fetch origin "${REPO_BRANCH}"
     sudo_cmd git pull --ff-only origin "${REPO_BRANCH}"
+    reexec_with_fresh_script
     return
   fi
 
@@ -330,6 +372,6 @@ main() {
   log "Deployment complete. Also allow ${PORT}/tcp in the Lightsail Networking tab, then open http://YOUR_LIGHTSAIL_PUBLIC_IP:${PORT}"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+if [[ -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]}" == "$0" ]]; then
   main "$@"
 fi

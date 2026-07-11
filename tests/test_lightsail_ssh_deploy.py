@@ -59,6 +59,19 @@ def test_lightsail_ssh_guide_documents_one_command_and_private_repo_path():
     assert "80/tcp" in guide
 
 
+def test_lightsail_redeploy_downloads_fresh_script_for_requested_branch():
+    guide = GUIDE.read_text(encoding="utf-8")
+    redeploy = guide.split("## 5. Redeploy After Code Changes", 1)[1].split(
+        "## 6. Troubleshooting", 1
+    )[0]
+
+    assert 'REPO_BRANCH="${REPO_BRANCH}"' in redeploy
+    assert "raw.githubusercontent.com" in redeploy
+    assert "${REPO_BRANCH}/scripts/deploy_lightsail_ubuntu.sh" in redeploy
+    assert "| sudo" in redeploy and "bash" in redeploy
+    assert "sudo /opt/pixelcraft/scripts/deploy_lightsail_ubuntu.sh" not in redeploy
+
+
 def test_production_scripts_verify_database_backup_before_starting_migrations():
     for script_path in (SCRIPT, DIGITALOCEAN_SCRIPT):
         script = script_path.read_text(encoding="utf-8")
@@ -117,6 +130,90 @@ def test_production_scripts_checkpoint_attempt_before_backup_and_complete_after_
     assert digitalocean_main.index("begin_deployment_checkpoint") < digitalocean_main.index(
         "backup_database"
     )
+
+
+def test_lightsail_pull_reexecs_checked_out_script_once_with_preserved_environment():
+    script = SCRIPT.read_text(encoding="utf-8")
+    update_path = script.split('if [[ -f "${APP_DIR}/docker-compose.yml" ]]', 1)[1]
+    reexec = script.split("reexec_with_fresh_script() {", 1)[1].split(
+        "fetch_or_update_project()", 1
+    )[0]
+
+    assert update_path.index("git pull --ff-only") < update_path.index(
+        "reexec_with_fresh_script"
+    )
+    assert 'PIXELCRAFT_REEXECUTED:-false' in reexec
+    assert 'PIXELCRAFT_REEXECUTED=true' in reexec
+    assert '${APP_DIR}/scripts/deploy_lightsail_ubuntu.sh' in reexec
+    for variable in (
+        "REPO_URL",
+        "REPO_BRANCH",
+        "APP_DIR",
+        "ENV_FILE",
+        "PORT",
+        "COMPOSE_PROJECT_NAME",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "OPENAI_IMAGE_MODEL",
+        "OPENAI_GRID_MODEL",
+    ):
+        assert f'"{variable}=' in reexec
+    assert '-z "${BASH_SOURCE[0]:-}"' in script
+
+
+def test_lightsail_reexec_guard_prevents_loop_and_preserves_checkpoint(tmp_path):
+    harness = tmp_path / "reexec-harness.sh"
+    fresh_script = tmp_path / "scripts" / "deploy_lightsail_ubuntu.sh"
+    fresh_script.parent.mkdir()
+    fresh_script.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    harness.write_text(
+        textwrap.dedent(
+            f"""\
+            #!/usr/bin/env bash
+            set -Eeuo pipefail
+            source {str(SCRIPT)!r}
+            APP_DIR={str(tmp_path)!r}
+            REPO_URL=https://example.test/repo.git
+            REPO_BRANCH=release-candidate
+            ENV_FILE="${{APP_DIR}}/.env"
+            PORT=8080
+            COMPOSE_PROJECT_NAME=pixelcraft-test
+            OPENAI_API_KEY=test-key
+            sudo_cmd() {{ "$@"; }}
+            log() {{ :; }}
+            exec_count=0
+            exec() {{
+              exec_count=$((exec_count + 1))
+              exec_args="$*"
+              return 0
+            }}
+            revision=old-running-commit
+            current_git_revision() {{ printf '%s\\n' "${{revision}}"; }}
+
+            begin_deployment_checkpoint
+            persist_rollback_backup_once /backups/original.db
+            reexec_with_fresh_script
+            [[ "${{exec_count}}" == 1 ]]
+            [[ "${{exec_args}}" == *"PIXELCRAFT_REEXECUTED=true"* ]]
+            [[ "${{exec_args}}" == *"REPO_BRANCH=release-candidate"* ]]
+            [[ "${{exec_args}}" == *"${{APP_DIR}}/scripts/deploy_lightsail_ubuntu.sh"* ]]
+
+            PIXELCRAFT_REEXECUTED=true
+            reexec_with_fresh_script
+            begin_deployment_checkpoint
+            [[ "${{exec_count}}" == 1 ]]
+            [[ "$(<"${{APP_DIR}}/.previous-deploy-commit")" == old-running-commit ]]
+            [[ "$(<"${{APP_DIR}}/.rollback-backup")" == /backups/original.db ]]
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", str(harness)], text=True, capture_output=True, check=False
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("script_path", (SCRIPT, DIGITALOCEAN_SCRIPT))
