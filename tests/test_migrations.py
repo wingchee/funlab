@@ -105,7 +105,7 @@ class MigrationTests(unittest.TestCase):
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     );
                     INSERT INTO users (id, email, password_hash, name, is_admin)
-                    VALUES (7, 'admin@example.com', '$2b$12$preserved-hash', 'Admin', 1);
+                    VALUES (7, ' Admin@Example.COM ', '$2b$12$preserved-hash', 'Admin', 1);
                     INSERT INTO patterns
                         (id, title, tags, size, grid_w, grid_h, faves_count,
                          preview_color, palette, grid_data)
@@ -117,7 +117,7 @@ class MigrationTests(unittest.TestCase):
             result = self._upgrade(database_path)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             with sqlite3.connect(database_path) as connection:
-                expected = (7, "admin@example.com", "$2b$12$preserved-hash", "Admin", 1)
+                expected = (7, " Admin@Example.COM ", "$2b$12$preserved-hash", "Admin", 1)
                 actual = connection.execute(
                     "SELECT id, email, password_hash, name, is_admin FROM users WHERE id=7"
                 ).fetchone()
@@ -128,6 +128,11 @@ class MigrationTests(unittest.TestCase):
                     ).fetchone(),
                     (7, 3),
                 )
+                with self.assertRaises(sqlite3.IntegrityError):
+                    connection.execute(
+                        "INSERT INTO users (email, password_hash, name, is_admin) "
+                        "VALUES ('admin@example.com', 'hash', 'Duplicate', 0)"
+                    )
 
     def test_upgrade_discards_experimental_member_rows_but_keeps_users(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -207,6 +212,69 @@ class MigrationTests(unittest.TestCase):
             result = self._upgrade(database_path)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Duplicate normalized user emails", result.stdout + result.stderr)
+            with sqlite3.connect(database_path) as connection:
+                self.assertNotIn("member_code", _columns(connection, "users"))
+                self.assertEqual(
+                    connection.execute("SELECT id, email FROM users ORDER BY id").fetchall(),
+                    [(1, "same@example.com"), (2, " SAME@example.com ")],
+                )
+
+    def test_null_admin_permissions_abort_before_schema_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "null-admin.db"
+            prepared = self._upgrade(database_path, "20260711_0002")
+            self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+            with sqlite3.connect(database_path) as connection:
+                connection.execute(
+                    "INSERT INTO users (id, email, password_hash, name, is_admin) "
+                    "VALUES (23, 'unclear@example.com', 'preserved-hash', 'Unclear', NULL)"
+                )
+
+            result = self._upgrade(database_path)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("NULL is_admin values for user IDs: 23", result.stdout + result.stderr)
+            with sqlite3.connect(database_path) as connection:
+                self.assertNotIn("member_code", _columns(connection, "users"))
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT id, email, password_hash, name, is_admin FROM users WHERE id=23"
+                    ).fetchone(),
+                    (23, "unclear@example.com", "preserved-hash", "Unclear", None),
+                )
+
+    def test_existing_non_unique_membership_indexes_are_replaced(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "wrong-indexes.db"
+            prepared = self._upgrade(database_path, "20260711_0002")
+            self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+            with sqlite3.connect(database_path) as connection:
+                connection.executescript(
+                    """
+                    ALTER TABLE users ADD COLUMN member_code VARCHAR;
+                    ALTER TABLE users ADD COLUMN phone VARCHAR;
+                    CREATE INDEX ix_users_member_code ON users (phone);
+                    CREATE INDEX ix_users_phone ON users (phone);
+                    """
+                )
+
+            result = self._upgrade(database_path)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            with sqlite3.connect(database_path) as connection:
+                indexes = {
+                    row[1]: row[2] for row in connection.execute("PRAGMA index_list('users')")
+                }
+                self.assertEqual(indexes["ix_users_member_code"], 1)
+                self.assertEqual(indexes["ix_users_phone"], 1)
+                self.assertEqual(
+                    connection.execute("PRAGMA index_info('ix_users_member_code')").fetchone()[2],
+                    "member_code",
+                )
+                self.assertEqual(
+                    connection.execute("PRAGMA index_info('ix_users_phone')").fetchone()[2],
+                    "phone",
+                )
 
     def test_runtime_schema_mutation_is_removed_and_container_runs_migrations(self):
         self.assertNotIn("ensure_runtime_schema", (BACKEND / "database.py").read_text())

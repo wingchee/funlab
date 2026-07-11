@@ -167,15 +167,55 @@ def _create_member_visits_referencing_users() -> None:
 
 
 def _create_unique_user_membership_indexes() -> None:
-    indexes = _indexes("users")
-    if "ix_users_member_code" not in indexes:
-        op.create_index("ix_users_member_code", "users", ["member_code"], unique=True)
-    if "ix_users_phone" not in indexes:
-        op.create_index("ix_users_phone", "users", ["phone"], unique=True)
+    expected = {
+        "ix_users_member_code": ["member_code"],
+        "ix_users_phone": ["phone"],
+    }
+    for name, columns in expected.items():
+        existing = _indexes("users").get(name)
+        if existing and (
+            not existing.get("unique") or existing.get("column_names") != columns
+        ):
+            op.drop_index(name, table_name="users")
+            existing = None
+        if not existing:
+            op.create_index(name, "users", columns, unique=True)
+
+
+def _validate_users_before_schema_changes() -> None:
+    connection = op.get_bind()
+    duplicates = connection.execute(
+        sa.text(
+            "SELECT LOWER(TRIM(email)) normalized_email FROM users "
+            "GROUP BY LOWER(TRIM(email)) HAVING COUNT(*) > 1"
+        )
+    ).scalars().all()
+    if duplicates:
+        raise RuntimeError("Duplicate normalized user emails: " + ", ".join(duplicates))
+    null_admin_ids = connection.execute(
+        sa.text("SELECT id FROM users WHERE is_admin IS NULL ORDER BY id")
+    ).scalars().all()
+    if null_admin_ids:
+        raise RuntimeError(
+            "NULL is_admin values for user IDs: "
+            + ", ".join(str(user_id) for user_id in null_admin_ids)
+        )
+
+
+def _create_normalized_user_email_index() -> None:
+    name = "uq_users_normalized_email"
+    if name not in _indexes("users"):
+        op.create_index(
+            name,
+            "users",
+            [sa.text("LOWER(TRIM(email))")],
+            unique=True,
+        )
 
 
 def upgrade() -> None:
     connection = op.get_bind()
+    _validate_users_before_schema_changes()
     user_columns = _columns("users")
     with op.batch_alter_table("users") as batch:
         if "member_code" not in user_columns:
@@ -197,18 +237,9 @@ def upgrade() -> None:
                 )
             )
 
-    duplicates = connection.execute(
-        sa.text(
-            "SELECT LOWER(TRIM(email)) normalized_email FROM users "
-            "GROUP BY LOWER(TRIM(email)) HAVING COUNT(*) > 1"
-        )
-    ).scalars().all()
-    if duplicates:
-        raise RuntimeError("Duplicate normalized user emails: " + ", ".join(duplicates))
-    connection.execute(sa.text("UPDATE users SET email=LOWER(TRIM(email))"))
-    connection.execute(sa.text("UPDATE users SET is_admin=0 WHERE is_admin IS NULL"))
     with op.batch_alter_table("users") as batch:
         batch.alter_column("is_admin", existing_type=sa.Boolean(), nullable=False)
+    _create_normalized_user_email_index()
 
     for table in ("member_visits", "member_packages"):
         _drop_if_present(table)
