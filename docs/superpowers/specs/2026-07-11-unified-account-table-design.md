@@ -6,7 +6,7 @@ Use `users` as the only account table for administrators and members. A person s
 
 ## Production Assumptions
 
-The production database currently contains `users` but no member records that must be preserved. Existing production user rows, IDs, passwords, favorites, and administrator permissions must survive unchanged. Before applying the schema migration, deployment creates a SQLite backup and aborts if the backup fails.
+The production database currently contains `users` but no member records that must be preserved. Existing production email text, user rows, IDs, passwords, favorites, and `is_admin` values must survive byte-for-byte unchanged. Before applying the schema migration, deployment creates a SQLite backup and aborts if the backup fails.
 
 Local member records and their package, visit, timer-assignment, and member-favorite test data do not need to be retained. The migration may remove and rebuild local-only membership tables and foreign keys to match the unified schema.
 
@@ -65,7 +65,7 @@ The Membership portal and main sign-in popup use the same session. Signing out f
 Create a new Alembic revision after the current head. Its upgrade is deterministic for both production-style and current local schemas:
 
 1. Add the optional membership columns to `users` when absent.
-2. Normalize existing user emails and reject collisions rather than choosing a row automatically.
+2. Detect normalized duplicate user emails and abort without rewriting any email text.
 3. Preserve every existing production user ID, password hash, favorite, and `is_admin` value.
 4. Drop local-only membership-dependent data in dependency order because the user approved discarding it.
 5. Recreate membership tables with foreign keys to `users.id` and required uniqueness/index constraints.
@@ -73,7 +73,7 @@ Create a new Alembic revision after the current head. Its upgrade is determinist
 7. Remove the `members` table.
 8. Seed missing table-timer rows without replacing existing timer state that does not reference discarded local members.
 
-The migration must inspect tables and columns before changing them so it works against both the production database and developer databases that already contain the experimental member schema. It must run transactionally where SQLite permits and fail with an actionable message on unexpected user-email collisions or backup/configuration problems.
+The migration must inspect tables and columns before changing them so it works against both the production database and developer databases that already contain the experimental member schema. Before schema changes, it must abort with an actionable message on normalized user-email collisions or any `NULL is_admin` value; it never guesses administrator permissions. It must run transactionally where SQLite permits and fail on backup/configuration problems.
 
 Downgrade is intentionally unsupported once unified membership data exists because reconstructing two password identities would be lossy. Restoration uses the pre-migration SQLite backup.
 
@@ -87,6 +87,7 @@ The old `/api/members/login` endpoint is removed. There is no compatibility alia
 
 - Deployment stops if the database backup cannot be created or verified.
 - Migration stops on duplicate normalized user emails.
+- Migration stops on `NULL is_admin` values rather than converting them.
 - Registration and edits rely on both application validation and database uniqueness.
 - Admin-only accounts are not treated as members unless they have a Member ID.
 - Membership operations reject inactive accounts and accounts without membership capability.
@@ -107,7 +108,7 @@ Frontend tests prove the main popup and Membership portal share one token, one a
 
 1. Stop write traffic to the backend.
 2. Create and verify a timestamped SQLite backup outside the database volume.
-3. Generate and persist a new production `SECRET_KEY` to invalidate old user and member sessions.
+3. Generate and persist a new production `SECRET_KEY` once to invalidate old user and member sessions, then retain it on routine deployments.
 4. Deploy the new backend image and run `alembic upgrade head` once.
 5. Start one backend replica and verify health, admin login, member registration, and database foreign keys.
 6. Start the remaining services and verify the frontend.

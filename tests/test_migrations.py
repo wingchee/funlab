@@ -291,6 +291,20 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("cp .env.example .env", quick_start)
         self.assertIn("secrets.token_hex(32)", quick_start)
 
+    def test_migration_docs_preserve_existing_account_bytes_and_abort_on_ambiguity(self):
+        design = (
+            ROOT / "docs/superpowers/specs/2026-07-11-unified-account-table-design.md"
+        ).read_text()
+        plan = (
+            ROOT / "docs/superpowers/plans/2026-07-11-unified-account-table.md"
+        ).read_text()
+
+        self.assertNotIn("Normalize existing user emails", design)
+        self.assertNotIn('UPDATE users SET email=LOWER(TRIM(email))', plan)
+        self.assertNotIn("UPDATE users SET is_admin=0 WHERE is_admin IS NULL", plan)
+        self.assertIn("byte-for-byte", design)
+        self.assertIn("NULL is_admin", design)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -138,6 +138,18 @@ EOF
 
 SQLite database and uploaded images live in named Docker volumes:
 
+The Lightsail and DigitalOcean deployment scripts automatically create a verified,
+timestamped database backup outside the Docker volume before starting containers.
+For the standard production settings, the script prints a path such as
+`/opt/pixelcraft/backups/pindou-20260712-153000.db`. It uses SQLite's online backup
+API and runs `PRAGMA integrity_check` against the destination; deployment aborts if
+either operation fails. It also records the checkout that was running before the
+update in `/opt/pixelcraft/.previous-deploy-commit`.
+
+The unified-account migration rotates `SECRET_KEY` once, after backup verification,
+and records that rotation in `.env`. This intentionally signs all users out once.
+Later routine deployments preserve the rotated key and do not sign users out again.
+
 ```bash
 # Inspect volume location
 docker volume inspect pindou_pindou_data
@@ -150,6 +162,26 @@ docker cp $(docker compose ps -q backend):/app/data/backup.db ./backup.db
 docker cp ./backup.db $(docker compose ps -q backend):/app/data/pindou.db
 docker compose restart backend
 ```
+
+### Roll back a migration deployment
+
+Use the verified backup path printed by the deployment script. The `BACKUP` command
+below selects the newest verified backup; set `BACKUP` to an older exact path under
+`/opt/pixelcraft/backups/` when an earlier restore point is required.
+
+```bash
+cd /opt/pixelcraft
+BACKUP="$(ls -1t /opt/pixelcraft/backups/pindou-*.db | head -n 1)"
+PREVIOUS_COMMIT="$(cat /opt/pixelcraft/.previous-deploy-commit)"
+sudo docker compose --project-name pixelcraft --env-file .env down
+MOUNTPOINT="$(sudo docker volume inspect pixelcraft_pindou_data --format '{{ .Mountpoint }}')"
+sudo install -m 0600 "${BACKUP}" "${MOUNTPOINT}/pindou.db"
+sudo git checkout "${PREVIOUS_COMMIT}"
+sudo docker compose --project-name pixelcraft --env-file .env up --build -d
+```
+
+Never use `docker compose down -v` during rollback: `-v` deletes the database and
+upload volumes.
 
 ---
 

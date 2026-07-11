@@ -49,7 +49,7 @@ require_project_files() {
 install_base_packages() {
   log "Installing base Ubuntu packages"
   sudo_cmd apt-get update
-  sudo_cmd apt-get install -y ca-certificates curl git gnupg lsb-release openssl ufw
+  sudo_cmd apt-get install -y ca-certificates curl git gnupg lsb-release openssl python3 ufw
 }
 
 install_docker() {
@@ -98,9 +98,9 @@ ensure_env_file() {
 
   if [[ ! -f "${ENV_FILE}" ]]; then
     if [[ -f "${APP_DIR}/.env.example" ]]; then
-      cp "${APP_DIR}/.env.example" "${ENV_FILE}"
+      sudo_cmd cp "${APP_DIR}/.env.example" "${ENV_FILE}"
     else
-      touch "${ENV_FILE}"
+      sudo_cmd touch "${ENV_FILE}"
     fi
   fi
 
@@ -112,7 +112,65 @@ ensure_env_file() {
 
   set_env_value "PORT" "${PORT}"
   set_env_value "COMPOSE_PROJECT_NAME" "${COMPOSE_PROJECT_NAME}"
-  chmod 600 "${ENV_FILE}"
+  sudo_cmd chmod 600 "${ENV_FILE}"
+}
+
+record_previous_deploy_commit() {
+  if ! sudo_cmd git -C "${APP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    log "No Git checkout metadata; skipping previous deployment commit record"
+    return
+  fi
+  local revision
+  revision="$(cd "${APP_DIR}" && sudo_cmd git rev-parse HEAD)"
+  printf '%s\n' "${revision}" \
+    | sudo_cmd tee "${APP_DIR}/.previous-deploy-commit" >/dev/null
+}
+
+backup_database() {
+  local volume_name="${COMPOSE_PROJECT_NAME}_pindou_data"
+  if ! sudo_cmd docker volume inspect "${volume_name}" >/dev/null 2>&1; then
+    log "No existing database volume; skipping backup"
+    return
+  fi
+
+  local mountpoint database_path backup_dir backup_path temporary_path
+  mountpoint="$(sudo_cmd docker volume inspect "${volume_name}" --format '{{ .Mountpoint }}')"
+  database_path="${mountpoint}/pindou.db"
+  if ! sudo_cmd test -f "${database_path}"; then
+    log "No existing SQLite database; skipping backup"
+    return
+  fi
+
+  backup_dir="${APP_DIR}/backups"
+  backup_path="${backup_dir}/pindou-$(date +'%Y%m%d-%H%M%S').db"
+  temporary_path="${backup_path}.partial"
+  sudo_cmd install -d -m 0700 "${backup_dir}"
+  sudo_cmd rm -f "${temporary_path}"
+  sudo_cmd python3 -c '
+import sqlite3, sys
+source, destination = sys.argv[1], sys.argv[2]
+with sqlite3.connect(source) as src, sqlite3.connect(destination) as dst:
+    src.backup(dst)
+with sqlite3.connect(destination) as check:
+    result = check.execute("PRAGMA integrity_check").fetchone()[0]
+if result != "ok":
+    raise SystemExit(f"backup integrity check failed: {result}")
+' "${database_path}" "${temporary_path}"
+  sudo_cmd chmod 0600 "${temporary_path}"
+  sudo_cmd mv "${temporary_path}" "${backup_path}"
+  log "Verified database backup: ${backup_path}"
+}
+
+rotate_secret_for_unified_accounts_once() {
+  local marker
+  marker="$(grep '^UNIFIED_ACCOUNT_SECRET_ROTATED=' "${ENV_FILE}" | cut -d= -f2- || true)"
+  if [[ "${marker}" == "true" ]]; then
+    log "Unified-account signing-key rotation already completed"
+    return
+  fi
+  set_env_value "SECRET_KEY" "$(openssl rand -hex 32)"
+  set_env_value "UNIFIED_ACCOUNT_SECRET_ROTATED" "true"
+  log "Rotated SECRET_KEY once for unified account migration"
 }
 
 configure_firewall() {
@@ -156,7 +214,10 @@ main() {
   require_project_files
   install_base_packages
   install_docker
+  record_previous_deploy_commit
   ensure_env_file
+  backup_database
+  rotate_secret_for_unified_accounts_once
   configure_firewall
   deploy_stack
   verify_stack

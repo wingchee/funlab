@@ -60,7 +60,7 @@ require_ubuntu() {
 install_base_packages() {
   log "Installing base Ubuntu packages"
   sudo_cmd apt-get update
-  sudo_cmd env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git gnupg lsb-release openssl ufw
+  sudo_cmd env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git gnupg lsb-release openssl python3 ufw
 }
 
 install_docker() {
@@ -97,6 +97,7 @@ fetch_or_update_project() {
   if [[ -f "${APP_DIR}/docker-compose.yml" ]]; then
     log "Updating existing PixelCraft checkout at ${APP_DIR}"
     cd "${APP_DIR}"
+    sudo_cmd git rev-parse HEAD | sudo_cmd tee "${APP_DIR}/.previous-deploy-commit" >/dev/null
     sudo_cmd git fetch origin "${REPO_BRANCH}"
     sudo_cmd git pull --ff-only origin "${REPO_BRANCH}"
     return
@@ -152,6 +153,53 @@ ensure_env_file() {
   sudo_cmd chmod 600 "${ENV_FILE}"
 }
 
+backup_database() {
+  local volume_name="${COMPOSE_PROJECT_NAME}_pindou_data"
+  if ! sudo_cmd docker volume inspect "${volume_name}" >/dev/null 2>&1; then
+    log "No existing database volume; skipping backup"
+    return
+  fi
+
+  local mountpoint database_path backup_dir backup_path temporary_path
+  mountpoint="$(sudo_cmd docker volume inspect "${volume_name}" --format '{{ .Mountpoint }}')"
+  database_path="${mountpoint}/pindou.db"
+  if ! sudo_cmd test -f "${database_path}"; then
+    log "No existing SQLite database; skipping backup"
+    return
+  fi
+
+  backup_dir="${APP_DIR}/backups"
+  backup_path="${backup_dir}/pindou-$(date +'%Y%m%d-%H%M%S').db"
+  temporary_path="${backup_path}.partial"
+  sudo_cmd install -d -m 0700 "${backup_dir}"
+  sudo_cmd rm -f "${temporary_path}"
+  sudo_cmd python3 -c '
+import sqlite3, sys
+source, destination = sys.argv[1], sys.argv[2]
+with sqlite3.connect(source) as src, sqlite3.connect(destination) as dst:
+    src.backup(dst)
+with sqlite3.connect(destination) as check:
+    result = check.execute("PRAGMA integrity_check").fetchone()[0]
+if result != "ok":
+    raise SystemExit(f"backup integrity check failed: {result}")
+' "${database_path}" "${temporary_path}"
+  sudo_cmd chmod 0600 "${temporary_path}"
+  sudo_cmd mv "${temporary_path}" "${backup_path}"
+  log "Verified database backup: ${backup_path}"
+}
+
+rotate_secret_for_unified_accounts_once() {
+  local marker
+  marker="$(grep '^UNIFIED_ACCOUNT_SECRET_ROTATED=' "${ENV_FILE}" | cut -d= -f2- || true)"
+  if [[ "${marker}" == "true" ]]; then
+    log "Unified-account signing-key rotation already completed"
+    return
+  fi
+  set_env_value "SECRET_KEY" "$(openssl rand -hex 32)"
+  set_env_value "UNIFIED_ACCOUNT_SECRET_ROTATED" "true"
+  log "Rotated SECRET_KEY once for unified account migration"
+}
+
 configure_firewall() {
   if [[ "${ENABLE_UFW}" != "true" ]]; then
     log "Skipping UFW configuration because ENABLE_UFW is not true"
@@ -196,6 +244,8 @@ main() {
   fetch_or_update_project
   require_project_files
   ensure_env_file
+  backup_database
+  rotate_secret_for_unified_accounts_once
   configure_firewall
   deploy_stack
   verify_stack

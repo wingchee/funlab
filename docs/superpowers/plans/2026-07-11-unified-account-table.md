@@ -195,8 +195,14 @@ def upgrade() -> None:
     )).scalars().all()
     if duplicates:
         raise RuntimeError("Duplicate normalized user emails: " + ", ".join(duplicates))
-    connection.execute(sa.text("UPDATE users SET email=LOWER(TRIM(email))"))
-    connection.execute(sa.text("UPDATE users SET is_admin=0 WHERE is_admin IS NULL"))
+    null_admin_ids = connection.execute(sa.text(
+        "SELECT id FROM users WHERE is_admin IS NULL ORDER BY id"
+    )).scalars().all()
+    if null_admin_ids:
+        raise RuntimeError(
+            "NULL is_admin values for user IDs: "
+            + ", ".join(str(user_id) for user_id in null_admin_ids)
+        )
     with op.batch_alter_table("users") as batch:
         batch.alter_column("is_admin", existing_type=sa.Boolean(), nullable=False)
 

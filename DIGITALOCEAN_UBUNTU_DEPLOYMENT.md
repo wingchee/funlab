@@ -134,6 +134,21 @@ sudo docker compose --project-name pixelcraft --env-file .env up --build -d
 
 ## 6. Backups
 
+Before each container start, the deployment script checks for
+`pixelcraft_pindou_data`. If the database exists, it creates a timestamped backup
+outside that volume, such as
+`/opt/pixelcraft/backups/pindou-20260712-153000.db`, and prints the verified path.
+The script uses SQLite's online backup API and `PRAGMA integrity_check`; a copy or
+integrity failure aborts deployment before migrations start.
+
+For Git checkouts, the script also writes the current revision to
+`/opt/pixelcraft/.previous-deploy-commit`. Uploaded source folders without Git
+metadata cannot provide commit rollback, so retain the prior uploaded release too.
+
+The unified-account release rotates `SECRET_KEY` once after the verified backup and
+persists a marker in `.env`. This intentionally signs all users out once. Repeated
+deployments keep the rotated key.
+
 Back up the SQLite database:
 
 ```bash
@@ -163,6 +178,27 @@ Copy backups to your computer:
 scp root@YOUR_DROPLET_IP:/opt/pixelcraft/backup.db .
 scp root@YOUR_DROPLET_IP:/opt/pixelcraft/uploads.tar.gz .
 ```
+
+### Roll back a migration deployment
+
+The `BACKUP` command selects the newest verified backup printed by the deployment
+script. To restore an older point, replace it with that exact
+`/opt/pixelcraft/backups/pindou-*.db` path. Git-based deployments can then restore
+the revision recorded before deployment:
+
+```bash
+cd /opt/pixelcraft
+BACKUP="$(ls -1t /opt/pixelcraft/backups/pindou-*.db | head -n 1)"
+PREVIOUS_COMMIT="$(cat /opt/pixelcraft/.previous-deploy-commit)"
+sudo docker compose --project-name pixelcraft --env-file .env down
+MOUNTPOINT="$(sudo docker volume inspect pixelcraft_pindou_data --format '{{ .Mountpoint }}')"
+sudo install -m 0600 "${BACKUP}" "${MOUNTPOINT}/pindou.db"
+sudo git checkout "${PREVIOUS_COMMIT}"
+sudo docker compose --project-name pixelcraft --env-file .env up --build -d
+```
+
+Never use `docker compose down -v` during rollback. The `-v` option deletes the
+named database and upload volumes.
 
 ## 7. Optional HTTPS
 
