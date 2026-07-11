@@ -19,10 +19,12 @@ SKIP_DOCKER_INSTALL="${SKIP_DOCKER_INSTALL:-false}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 LOG_FILE="${LOG_FILE:-/var/log/pixelcraft-lightsail-deploy.log}"
 
-if [[ "${EUID}" -eq 0 ]]; then
-  exec > >(tee -a "${LOG_FILE}") 2>&1
-else
-  exec > >(sudo tee -a "${LOG_FILE}") 2>&1
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  if [[ "${EUID}" -eq 0 ]]; then
+    exec > >(tee -a "${LOG_FILE}") 2>&1
+  else
+    exec > >(sudo tee -a "${LOG_FILE}") 2>&1
+  fi
 fi
 
 log() {
@@ -96,8 +98,8 @@ install_docker() {
 fetch_or_update_project() {
   if [[ -f "${APP_DIR}/docker-compose.yml" ]]; then
     log "Updating existing PixelCraft checkout at ${APP_DIR}"
+    begin_deployment_checkpoint
     cd "${APP_DIR}"
-    sudo_cmd git rev-parse HEAD | sudo_cmd tee "${APP_DIR}/.previous-deploy-commit" >/dev/null
     sudo_cmd git fetch origin "${REPO_BRANCH}"
     sudo_cmd git pull --ff-only origin "${REPO_BRANCH}"
     return
@@ -108,6 +110,7 @@ fetch_or_update_project() {
   log "Cloning PixelCraft from ${REPO_URL} into ${APP_DIR}"
   sudo_cmd rm -rf "${APP_DIR}"
   sudo_cmd git clone --branch "${REPO_BRANCH}" --single-branch "${REPO_URL}" "${APP_DIR}"
+  begin_deployment_checkpoint new_install
 }
 
 require_project_files() {
@@ -153,6 +156,79 @@ ensure_env_file() {
   sudo_cmd chmod 600 "${ENV_FILE}"
 }
 
+current_git_revision() {
+  sudo_cmd git -C "${APP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  sudo_cmd git -C "${APP_DIR}" rev-parse HEAD
+}
+
+write_checkpoint_value() {
+  local path="$1"
+  local value="$2"
+  printf '%s\n' "${value}" | sudo_cmd tee "${path}" >/dev/null
+  sudo_cmd chmod 0600 "${path}"
+}
+
+begin_deployment_checkpoint() {
+  local install_kind="${1:-existing_install}"
+  local in_progress="${APP_DIR}/.deploy-in-progress"
+  local rollback_commit="${APP_DIR}/.previous-deploy-commit"
+  local rollback_backup="${APP_DIR}/.rollback-backup"
+  local last_successful="${APP_DIR}/.last-successful-deploy-commit"
+
+  if sudo_cmd test -f "${in_progress}"; then
+    log "Resuming an in-progress deployment; preserving rollback checkpoint"
+    return
+  fi
+
+  sudo_cmd install -d "${APP_DIR}"
+  sudo_cmd rm -f "${rollback_backup}" "${rollback_commit}"
+
+  local revision=""
+  if [[ "${install_kind}" == "new_install" ]]; then
+    log "New install has no running revision to record for rollback"
+  elif sudo_cmd test -s "${last_successful}"; then
+    revision="$(sudo_cmd cat "${last_successful}")"
+    log "Using the last successful deployment as the rollback commit"
+  elif revision="$(current_git_revision)"; then
+    log "Captured the currently running Git revision for rollback"
+  else
+    log "No Git metadata or last-successful revision; commit rollback is unavailable"
+  fi
+
+  if [[ -n "${revision}" ]]; then
+    write_checkpoint_value "${rollback_commit}" "${revision}"
+  fi
+  sudo_cmd touch "${in_progress}"
+  sudo_cmd chmod 0600 "${in_progress}"
+  log "Started a new persisted deployment checkpoint"
+}
+
+persist_rollback_backup_once() {
+  local backup_path="$1"
+  local rollback_backup="${APP_DIR}/.rollback-backup"
+  if sudo_cmd test -s "${rollback_backup}"; then
+    log "Rollback backup already recorded for this deployment attempt; preserving it"
+    return
+  fi
+  write_checkpoint_value "${rollback_backup}" "${backup_path}"
+  log "Recorded rollback backup for this deployment attempt: ${backup_path}"
+}
+
+complete_deployment_checkpoint() {
+  local in_progress="${APP_DIR}/.deploy-in-progress"
+  local last_successful="${APP_DIR}/.last-successful-deploy-commit"
+  local revision=""
+  if revision="$(current_git_revision)"; then
+    write_checkpoint_value "${last_successful}" "${revision}"
+    log "Recorded the new deployment as last successful"
+  else
+    sudo_cmd rm -f "${last_successful}"
+    log "Deployment verified without Git metadata; no last-successful commit recorded"
+  fi
+  sudo_cmd rm -f "${in_progress}"
+  log "Cleared the in-progress deployment checkpoint"
+}
+
 backup_database() {
   local volume_name="${COMPOSE_PROJECT_NAME}_pindou_data"
   if ! sudo_cmd docker volume inspect "${volume_name}" >/dev/null 2>&1; then
@@ -185,6 +261,7 @@ if result != "ok":
 ' "${database_path}" "${temporary_path}"
   sudo_cmd chmod 0600 "${temporary_path}"
   sudo_cmd mv "${temporary_path}" "${backup_path}"
+  persist_rollback_backup_once "${backup_path}"
   log "Verified database backup: ${backup_path}"
 }
 
@@ -249,7 +326,10 @@ main() {
   configure_firewall
   deploy_stack
   verify_stack
+  complete_deployment_checkpoint
   log "Deployment complete. Also allow ${PORT}/tcp in the Lightsail Networking tab, then open http://YOUR_LIGHTSAIL_PUBLIC_IP:${PORT}"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

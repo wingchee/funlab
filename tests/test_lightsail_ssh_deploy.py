@@ -1,6 +1,9 @@
 import os
 import subprocess
+import textwrap
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,19 +80,88 @@ def test_production_scripts_record_previous_commit_and_rotate_secret_only_once()
         script = script_path.read_text(encoding="utf-8")
 
         assert ".previous-deploy-commit" in script
-        assert "git rev-parse HEAD" in script
+        assert "rev-parse HEAD" in script
         assert "UNIFIED_ACCOUNT_SECRET_ROTATED" in script
         assert "Rotated SECRET_KEY once for unified account migration" in script
 
     lightsail = SCRIPT.read_text(encoding="utf-8")
     update_path = lightsail.split('if [[ -f "${APP_DIR}/docker-compose.yml" ]]', 1)[1]
-    assert update_path.index(".previous-deploy-commit") < update_path.index("git pull --ff-only")
+    assert update_path.index("begin_deployment_checkpoint") < update_path.index(
+        "git pull --ff-only"
+    )
+
+
+def test_production_scripts_checkpoint_attempt_before_backup_and_complete_after_health():
+    for script_path in (SCRIPT, DIGITALOCEAN_SCRIPT):
+        script = script_path.read_text(encoding="utf-8")
+        main = script.split("main() {", 1)[1]
+
+        assert ".deploy-in-progress" in script
+        assert ".rollback-backup" in script
+        assert ".last-successful-deploy-commit" in script
+        assert "begin_deployment_checkpoint()" in script
+        assert "persist_rollback_backup_once()" in script
+        assert "complete_deployment_checkpoint()" in script
+        assert main.index("backup_database") < main.index("deploy_stack")
+        assert main.index("verify_stack") < main.index("complete_deployment_checkpoint")
+        backup = script.split("backup_database() {", 1)[1].split(
+            "rotate_secret_for_unified_accounts_once()", 1
+        )[0]
+        assert backup.index('sudo_cmd mv "${temporary_path}" "${backup_path}"') < backup.index(
+            "persist_rollback_backup_once"
+        )
+
+    digitalocean_main = DIGITALOCEAN_SCRIPT.read_text(encoding="utf-8").split(
+        "main() {", 1
+    )[1]
+    assert digitalocean_main.index("begin_deployment_checkpoint") < digitalocean_main.index(
+        "backup_database"
+    )
+
+
+@pytest.mark.parametrize("script_path", (SCRIPT, DIGITALOCEAN_SCRIPT))
+def test_failed_deployment_retry_preserves_original_rollback_pointers(
+    tmp_path, script_path
+):
+    harness = tmp_path / "checkpoint-harness.sh"
+    harness.write_text(
+        textwrap.dedent(
+            f"""\
+            #!/usr/bin/env bash
+            set -Eeuo pipefail
+            source {str(script_path)!r}
+            APP_DIR={str(tmp_path)!r}
+            sudo_cmd() {{ "$@"; }}
+            log() {{ :; }}
+            revision=old-running-commit
+            current_git_revision() {{ printf '%s\\n' "${{revision}}"; }}
+
+            begin_deployment_checkpoint
+            persist_rollback_backup_once /backups/original.db
+
+            revision=failed-new-commit
+            begin_deployment_checkpoint
+            persist_rollback_backup_once /backups/retry-diagnostic.db
+
+            [[ "$(<"${{APP_DIR}}/.previous-deploy-commit")" == old-running-commit ]]
+            [[ "$(<"${{APP_DIR}}/.rollback-backup")" == /backups/original.db ]]
+            [[ -f "${{APP_DIR}}/.deploy-in-progress" ]]
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", str(harness)], text=True, capture_output=True, check=False
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_production_guides_document_verified_backup_rotation_and_exact_restore():
     required_restore_commands = (
-        'BACKUP="$(ls -1t /opt/pixelcraft/backups/pindou-*.db | head -n 1)"',
-        'PREVIOUS_COMMIT="$(cat /opt/pixelcraft/.previous-deploy-commit)"',
+        'BACKUP="$(sudo cat /opt/pixelcraft/.rollback-backup)"',
+        'PREVIOUS_COMMIT="$(sudo cat /opt/pixelcraft/.previous-deploy-commit)"',
         "sudo docker compose --project-name pixelcraft --env-file .env down",
         "sudo docker volume inspect pixelcraft_pindou_data",
         'sudo install -m 0600 "${BACKUP}" "${MOUNTPOINT}/pindou.db"',
@@ -101,7 +173,10 @@ def test_production_guides_document_verified_backup_rotation_and_exact_restore()
         guide = guide_path.read_text(encoding="utf-8")
 
         assert "/opt/pixelcraft/backups/pindou-" in guide
+        assert "newest" not in guide.lower().split("roll back a migration deployment", 1)[1]
         assert "SECRET_KEY" in guide and "sign" in guide.lower()
         assert "docker compose down -v" in guide
+        rollback = guide.lower().split("roll back a migration deployment", 1)[1]
+        assert rollback.index("set -e") < rollback.index("docker compose --project-name")
         for command in required_restore_commands:
             assert command in guide

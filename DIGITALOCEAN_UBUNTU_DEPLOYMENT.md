@@ -141,9 +141,15 @@ outside that volume, such as
 The script uses SQLite's online backup API and `PRAGMA integrity_check`; a copy or
 integrity failure aborts deployment before migrations start.
 
-For Git checkouts, the script also writes the current revision to
-`/opt/pixelcraft/.previous-deploy-commit`. Uploaded source folders without Git
-metadata cannot provide commit rollback, so retain the prior uploaded release too.
+At the start of a deployment attempt, the script writes the currently running Git
+revision to `/opt/pixelcraft/.previous-deploy-commit`, clears the old backup pointer,
+and creates an in-progress marker. The first verified backup is persisted in
+`/opt/pixelcraft/.rollback-backup`. If deployment fails, retries preserve both
+pointers; later backups are diagnostic only. After health verification, the script
+records `.last-successful-deploy-commit` and clears the marker so a future deployment
+can create a fresh checkpoint. Uploaded source folders without Git metadata cannot
+provide commit rollback, so the script logs that limitation and you must retain the
+prior uploaded release.
 
 The unified-account release rotates `SECRET_KEY` once after the verified backup and
 persists a marker in `.env`. This intentionally signs all users out once. Repeated
@@ -181,15 +187,17 @@ scp root@YOUR_DROPLET_IP:/opt/pixelcraft/uploads.tar.gz .
 
 ### Roll back a migration deployment
 
-The `BACKUP` command selects the newest verified backup printed by the deployment
-script. To restore an older point, replace it with that exact
-`/opt/pixelcraft/backups/pindou-*.db` path. Git-based deployments can then restore
-the revision recorded before deployment:
+Read the rollback commit and first verified backup from the failed attempt's
+persisted checkpoint. Do not select a later diagnostic backup created by a retry.
+If `.rollback-backup` is absent, the attempt began without an existing database and
+there is no database backup to restore. Git-based deployments can restore the
+recorded revision:
 
 ```bash
+set -e
 cd /opt/pixelcraft
-BACKUP="$(ls -1t /opt/pixelcraft/backups/pindou-*.db | head -n 1)"
-PREVIOUS_COMMIT="$(cat /opt/pixelcraft/.previous-deploy-commit)"
+BACKUP="$(sudo cat /opt/pixelcraft/.rollback-backup)"
+PREVIOUS_COMMIT="$(sudo cat /opt/pixelcraft/.previous-deploy-commit)"
 sudo docker compose --project-name pixelcraft --env-file .env down
 MOUNTPOINT="$(sudo docker volume inspect pixelcraft_pindou_data --format '{{ .Mountpoint }}')"
 sudo install -m 0600 "${BACKUP}" "${MOUNTPOINT}/pindou.db"
