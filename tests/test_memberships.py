@@ -6,6 +6,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import cv2
+import numpy as np
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -78,6 +80,162 @@ class MembershipTests(unittest.TestCase):
         self.assertEqual(memberships.search_members(db, alice.email)[0].id, alice.id)
         self.assertEqual(memberships.search_members(db, "999888")[0].id, bob.id)
         self.assertEqual(memberships.search_members(db, alice.member_code)[0].id, alice.id)
+
+    def test_admin_creates_member_with_normalized_phone_and_private_balance_link(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+        )
+        db.add(admin)
+        db.commit()
+
+        created = memberships.admin_create_member(
+            schemas.MemberCreate(name="Ari", phone="+61 412 345 678"),
+            _=admin,
+            db=db,
+        )
+
+        self.assertRegex(created["member_code"], r"^FL\d{8}$")
+        self.assertGreaterEqual(len(created["balance_access_token"]), 32)
+        self.assertEqual(created["phone"], "61412345678")
+        self.assertEqual(
+            db.query(models.User).filter_by(id=created["id"]).one().email,
+            f"member-{created['balance_access_token'][:24]}@members.funlab.invalid",
+        )
+
+    def test_admin_member_creation_rejects_duplicate_normalized_phone(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+        )
+        db.add(admin)
+        db.commit()
+        memberships.admin_create_member(
+            schemas.MemberCreate(name="Ari", phone="+61 412 345 678"), _=admin, db=db
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            memberships.admin_create_member(
+                schemas.MemberCreate(name="Bea", phone="61412345678"), _=admin, db=db
+            )
+
+        self.assertEqual(raised.exception.status_code, 409)
+
+    def test_public_balance_exposes_only_safe_member_balance_fields(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+        )
+        db.add(admin)
+        db.commit()
+        created = memberships.admin_create_member(
+            schemas.MemberCreate(name="Ari", phone="+61 412 345 678"), _=admin, db=db
+        )
+        member = db.query(models.User).filter_by(id=created["id"]).one()
+        memberships.add_package_record(db, member, "First", 1800)
+        memberships.add_package_record(db, member, "Second", 3600)
+
+        public = memberships.public_member_balance(created["balance_access_token"], db=db)
+
+        self.assertEqual(set(public), {"name", "member_code", "remaining_seconds", "packages"})
+        self.assertEqual(public["name"], "Ari")
+        self.assertEqual(public["remaining_seconds"], 5400)
+        self.assertEqual(
+            public["packages"],
+            [
+                {"package_name": "First", "remaining_seconds": 1800},
+                {"package_name": "Second", "remaining_seconds": 3600},
+            ],
+        )
+
+    def test_public_balance_rejects_inactive_member_and_replaced_token(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+        )
+        db.add(admin)
+        db.commit()
+        created = memberships.admin_create_member(
+            schemas.MemberCreate(name="Ari", phone="+61 412 345 678"), _=admin, db=db
+        )
+        member = db.query(models.User).filter_by(id=created["id"]).one()
+        member.is_active = False
+        db.commit()
+
+        with self.assertRaises(HTTPException) as inactive:
+            memberships.public_member_balance(created["balance_access_token"], db=db)
+        self.assertEqual(inactive.exception.status_code, 404)
+
+        member.is_active = True
+        db.commit()
+        replacement = memberships.regenerate_member_balance_link(created["id"], _=admin, db=db)
+        with self.assertRaises(HTTPException) as expired:
+            memberships.public_member_balance(created["balance_access_token"], db=db)
+        self.assertEqual(expired.exception.status_code, 404)
+        self.assertNotEqual(replacement["balance_access_token"], created["balance_access_token"])
+
+    def test_balance_qr_encodes_public_link_and_has_center_logo_plate(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+        )
+        db.add(admin)
+        db.commit()
+        created = memberships.admin_create_member(
+            schemas.MemberCreate(name="Ari", phone="+61 412 345 678"), _=admin, db=db
+        )
+
+        response = memberships.admin_member_balance_qr(
+            created["id"], origin="https://members.example", _=admin, db=db
+        )
+        image = cv2.imdecode(np.frombuffer(response.body, dtype=np.uint8), cv2.IMREAD_COLOR)
+        decoded, _, _ = cv2.QRCodeDetector().detectAndDecode(image)
+
+        self.assertEqual(decoded, f"https://members.example/member/{created['balance_access_token']}")
+        center = image[image.shape[0] * 2 // 5:image.shape[0] * 3 // 5,
+                       image.shape[1] * 2 // 5:image.shape[1] * 3 // 5]
+        self.assertTrue(np.any(np.all(center > 220, axis=2)))
+        self.assertTrue(np.any(np.all(image < 20, axis=2)))
+
+    def test_balance_qr_rejects_invalid_origin(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+        )
+        db.add(admin)
+        db.commit()
+        created = memberships.admin_create_member(
+            schemas.MemberCreate(name="Ari", phone="+61 412 345 678"), _=admin, db=db
+        )
+
+        for origin in ("members.example", "javascript:alert(1)", "https://"):
+            with self.subTest(origin=origin), self.assertRaises(HTTPException) as raised:
+                memberships.admin_member_balance_qr(created["id"], origin=origin, _=admin, db=db)
+            self.assertEqual(raised.exception.status_code, 400)
 
     def test_staff_search_finds_admin_only_account_by_name_or_email(self):
         db = self._session()

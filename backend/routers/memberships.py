@@ -2,7 +2,9 @@ import io
 import re
 import secrets
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import or_
@@ -15,6 +17,7 @@ from auth import get_admin_user, get_membership_user, hash_password, normalize_e
 from database import get_db
 
 router = APIRouter()
+_BALANCE_QR_LOGO = Path(__file__).resolve().parents[1] / "assets" / "funlab-logo.jpeg"
 
 
 def remaining_seconds_for_member(member: models.User) -> int:
@@ -110,6 +113,161 @@ def _generate_member_code(db: Session) -> str:
         if not db.query(models.User.id).filter(models.User.member_code == code).first():
             return code
     raise HTTPException(status_code=500, detail="Unable to generate unique Member ID")
+
+
+def _generate_balance_access_token(db: Session) -> str:
+    for _ in range(20):
+        token = secrets.token_urlsafe(32)
+        if not db.query(models.User.id).filter(models.User.balance_access_token == token).first():
+            return token
+    raise HTTPException(status_code=500, detail="Unable to generate private balance link")
+
+
+def _member_with_balance_link(db: Session, member_id: int) -> models.User:
+    member = (
+        db.query(models.User)
+        .filter(models.User.id == member_id, models.User.member_code.is_not(None))
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return member
+
+
+def _balance_link_response(member: models.User) -> dict:
+    return {
+        "id": member.id,
+        "member_code": member.member_code,
+        "balance_access_token": member.balance_access_token,
+    }
+
+
+def _balance_qr_png_bytes(value: str) -> bytes:
+    import qrcode  # noqa: PLC0415
+    from PIL import Image  # noqa: PLC0415
+
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(value)
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    logo = Image.open(_BALANCE_QR_LOGO).convert("RGBA")
+    logo_limit = max(1, image.width // 5)
+    logo.thumbnail((logo_limit, logo_limit), Image.Resampling.LANCZOS)
+    plate_size = max(logo.width, logo.height) + max(12, image.width // 50)
+    plate = Image.new("RGB", (plate_size, plate_size), "white")
+    plate_x = (image.width - plate_size) // 2
+    plate_y = (image.height - plate_size) // 2
+    image.paste(plate, (plate_x, plate_y))
+    logo_x = (image.width - logo.width) // 2
+    logo_y = (image.height - logo.height) // 2
+    image.paste(logo, (logo_x, logo_y), logo)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+@router.post("")
+def admin_create_member(
+    body: schemas.MemberCreate,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    name = body.name.strip()
+    phone = normalize_phone(body.phone)
+    if not name:
+        raise HTTPException(status_code=400, detail="Member name is required")
+    if not phone:
+        raise HTTPException(status_code=400, detail="A valid phone is required")
+    if db.query(models.User.id).filter(models.User.phone == phone).first():
+        raise HTTPException(status_code=409, detail="Phone is already used by another account")
+
+    balance_access_token = _generate_balance_access_token(db)
+    member = models.User(
+        email=f"member-{balance_access_token[:24]}@members.funlab.invalid",
+        password_hash=hash_password(secrets.token_urlsafe(32)),
+        name=name,
+        is_admin=False,
+        member_code=_generate_member_code(db),
+        balance_access_token=balance_access_token,
+        phone=phone,
+        is_active=True,
+        notes="",
+    )
+    db.add(member)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Member phone or private balance link is already in use") from exc
+    db.refresh(member)
+    payload = serialize_member(member)
+    payload["balance_access_token"] = member.balance_access_token
+    return payload
+
+
+@router.get("/public/{token}")
+def public_member_balance(token: str, db: Session = Depends(get_db)):
+    member = (
+        db.query(models.User)
+        .filter(
+            models.User.balance_access_token == token,
+            models.User.member_code.is_not(None),
+            models.User.is_active.is_(True),
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=404, detail="Member balance link not found")
+    return {
+        "name": member.name,
+        "member_code": member.member_code,
+        "remaining_seconds": remaining_seconds_for_member(member),
+        "packages": [
+            {
+                "package_name": item.package_name,
+                "remaining_seconds": int(item.remaining_seconds or 0),
+            }
+            for item in sorted(member.packages, key=lambda item: item.id)
+        ],
+    }
+
+
+@router.post("/{member_id}/balance-link/regenerate")
+def regenerate_member_balance_link(
+    member_id: int,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    member = _member_with_balance_link(db, member_id)
+    member.balance_access_token = _generate_balance_access_token(db)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Unable to regenerate private balance link") from exc
+    db.refresh(member)
+    return _balance_link_response(member)
+
+
+@router.get("/{member_id}/balance-qr")
+def admin_member_balance_qr(
+    member_id: int,
+    origin: str,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    parsed_origin = urlparse(origin)
+    if parsed_origin.scheme not in {"http", "https"} or not parsed_origin.netloc:
+        raise HTTPException(status_code=400, detail="A valid http or https origin is required")
+    member = _member_with_balance_link(db, member_id)
+    if not member.balance_access_token:
+        raise HTTPException(status_code=404, detail="Member balance link not found")
+    value = f"{origin.rstrip('/')}/member/{member.balance_access_token}"
+    return Response(content=_balance_qr_png_bytes(value), media_type="image/png")
 
 
 def _membership_removal_conflicts(db: Session, user_id: int) -> list[str]:

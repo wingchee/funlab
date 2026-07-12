@@ -3,7 +3,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -23,7 +24,6 @@ from auth import (  # noqa: E402
     get_current_user,
     get_membership_user,
     hash_password,
-    verify_password,
 )
 from routers import favorites  # noqa: E402
 from routers import auth as auth_router  # noqa: E402
@@ -95,23 +95,11 @@ def test_preserved_space_padded_mixed_case_email_logs_in_normalized(db):
     assert admin.email == " Admin@Example.COM "
 
 
-def test_member_registration_uses_users_bcrypt_and_unified_jwt(db):
-    result = auth_router.register(
-        schemas.MemberRegistration(
-            email=" Member@Example.com ",
-            name="Member",
-            phone="+60 12-345 6789",
-            password="member-pass",
-            password_confirmation="member-pass",
-        ),
-        db=db,
-    )
+def test_public_registration_route_returns_not_found():
+    app = FastAPI()
+    app.include_router(auth_router.router, prefix="/api/auth")
 
-    user = db.query(models.User).filter_by(email="member@example.com").one()
-    assert user.member_code.startswith("FL")
-    assert user.phone == "60123456789"
-    assert verify_password("member-pass", user.password_hash)
-    assert result["access_token"].count(".") == 2
+    assert TestClient(app).post("/api/auth/register", json={}).status_code == 404
 
 
 @pytest.mark.parametrize("identifier", ["member@example.com", "60123456789", "fl00000001"])
@@ -141,41 +129,6 @@ def test_inactive_and_wrong_password_share_generic_error(db):
             auth_router.login(body, db=db)
         assert error.value.status_code == 401
         assert error.value.detail == "Invalid credentials"
-
-
-def test_registration_rejects_duplicate_normalized_email_and_phone(db):
-    _member(db)
-    for email, phone in (
-        (" MEMBER@EXAMPLE.COM ", "60111111111"),
-        ("other@example.com", "+60 12-345 6789"),
-    ):
-        with pytest.raises(HTTPException) as error:
-            auth_router.register(
-                schemas.MemberRegistration(
-                    email=email,
-                    name="Duplicate",
-                    phone=phone,
-                    password="member-pass",
-                    password_confirmation="member-pass",
-                ),
-                db=db,
-            )
-        assert error.value.status_code == 409
-
-
-def test_registration_rejects_password_confirmation_mismatch(db):
-    with pytest.raises(HTTPException) as error:
-        auth_router.register(
-            schemas.MemberRegistration(
-                email="new@example.com",
-                name="New",
-                phone="60111111111",
-                password="one",
-                password_confirmation="two",
-            ),
-            db=db,
-        )
-    assert error.value.status_code == 400
 
 
 def test_membership_and_admin_dependencies_accept_unified_roles(db):
