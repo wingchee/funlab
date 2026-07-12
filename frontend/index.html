@@ -3319,6 +3319,9 @@ function MembershipPage({ user, onLogout }) {
             <p style={{color:'#888',fontSize:15}}>Search members, scan QR codes, add packages, and check members into tables.</p>
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <button onClick={() => search('')} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
+              {loading ? 'Loading' : 'Refresh'}
+            </button>
             <div style={{display:'flex',gap:8,background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:4}}>
               {[
                 ['staff', 'Staff Dashboard'],
@@ -3329,9 +3332,6 @@ function MembershipPage({ user, onLogout }) {
                 </button>
               ))}
             </div>
-            <button onClick={() => search('')} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
-              {loading ? 'Loading' : 'Refresh'}
-            </button>
           </div>
         </div>
 

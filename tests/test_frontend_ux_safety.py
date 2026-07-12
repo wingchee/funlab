@@ -144,3 +144,16 @@ def test_member_portal_revokes_latest_qr_url_on_unmount():
     assert "return () => {" in html
     assert "URL.revokeObjectURL(qrUrlRef.current)" in html
     assert "qrUrlRef.current = ''" in html
+
+
+def test_membership_staff_header_places_refresh_before_mode_switcher():
+    html = read_frontend()
+    staff_header_start = html.index(
+        "Search members, scan QR codes, add packages, and check members into tables."
+    )
+    staff_header_end = html.index("{message &&", staff_header_start)
+    staff_header = html[staff_header_start:staff_header_end]
+
+    assert staff_header.index("onClick={() => search('')}") < staff_header.index(
+        "['staff', 'Staff Dashboard']"
+    )
