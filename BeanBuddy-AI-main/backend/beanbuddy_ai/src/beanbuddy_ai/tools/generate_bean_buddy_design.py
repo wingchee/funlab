@@ -25,6 +25,7 @@ from rembg.sessions import BaseSession
 from ..models import GenerateBeanBuddyDesignInput, GenerateBeanBuddyDesignOutput
 
 logger = logging.getLogger(__name__)
+MARD_221_COLOR_TEMPLATE = "mard"
 
 # 全局会话缓存
 _session_cache = {}
@@ -37,8 +38,8 @@ class GenerateBeanBuddyDesignConfig(FunctionBaseConfig, name="generate_bean_budd
     """
     # Add your custom configuration parameters here
     color_card_template: str = Field(
-        default="卡卡",
-        description="用户生成拼豆设计图的色卡模版，默认“卡卡”"
+        default=MARD_221_COLOR_TEMPLATE,
+        description="用户生成拼豆设计图的色卡模版，固定使用 mard 221 色卡"
     )
 
     rembg_model_name: str = Field(
@@ -66,7 +67,7 @@ async def generate_bean_buddy_design_function(
     async def _generate_bean_buddy_design_function(
             input_data: GenerateBeanBuddyDesignInput) -> GenerateBeanBuddyDesignOutput:
         try:
-            result = _generate_bead_design(input_data.input_data, session, config.color_card_template)
+            result = _generate_bead_design(input_data.input_data, session, MARD_221_COLOR_TEMPLATE)
             color_statistics = []
             for color, statistic in result['color_statistics'].items():
                 color_name, hex_str = color.split("_")
@@ -79,7 +80,7 @@ async def generate_bean_buddy_design_function(
                 "### Q版拼豆设计图\n"
                 f"![Q版拼豆设计图]({result['image_name']})\n"
                 "### 材料清单\n"
-                f"#### 色卡: {config.color_card_template}\n"
+                f"#### 色卡: {MARD_221_COLOR_TEMPLATE}\n"
                 "| 珠子编号 | 数量 | 颜色预览 |\n"
                 f"| --- | --- | --- |\n{'\n'.join(color_statistics)}\n"
                 f"### 总数量\n{total_beads}"
@@ -107,7 +108,11 @@ async def generate_bean_buddy_design_function(
         logger.info("Cleaning up generate_bean_buddy_design workflow.")
 
 
-def _generate_bead_design(image_url: str, session: BaseSession, color_template: str = "卡卡") -> Dict[str, Any]:
+def _generate_bead_design(
+    image_url: str,
+    session: BaseSession,
+    color_template: str = MARD_221_COLOR_TEMPLATE,
+) -> Dict[str, Any]:
     """
     生成拼豆设计图并统计颜色数量。
 
@@ -119,6 +124,7 @@ def _generate_bead_design(image_url: str, session: BaseSession, color_template: 
     Returns:
         dict: 包含处理后的图片数据（如Base64编码字符串）和颜色统计结果。
     """
+    color_template = MARD_221_COLOR_TEMPLATE
 
     # 保存结果图片路径
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -415,10 +421,11 @@ def process_large_image_optimized(image_url: str, session: Any,
                                   draw_labels: bool = False,
                                   replace_colors: bool = True,
                                   max_workers: int = None,
-                                  color_template: str = "卡卡") -> Dict[str, Any]:
+                                  color_template: str = MARD_221_COLOR_TEMPLATE) -> Dict[str, Any]:
     """
     优化版的大图像处理函数
     """
+    color_template = MARD_221_COLOR_TEMPLATE
     # 解析颜色卡
     color_card_data = json.load(open('beanbuddy_ai/src/beanbuddy_ai/configs/color_cards.json', 'rb'))
     color_card = get_cached_color_card(color_card_data, color_template)

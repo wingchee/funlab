@@ -61,6 +61,15 @@ For an already-created Amazon Lightsail Ubuntu instance, use the SSH deploy guid
 - `LIGHTSAIL_SSH_DEPLOY.md`
 - `scripts/deploy_lightsail_ubuntu.sh`
 
+Start every public-repository rollout with the fresh raw script from the requested
+branch (the checked-out script re-executes itself once after pulling):
+
+```bash
+REPO_BRANCH=main
+curl -fsSL "https://raw.githubusercontent.com/YOUR_ACCOUNT/YOUR_REPO/${REPO_BRANCH}/scripts/deploy_lightsail_ubuntu.sh" \
+  | sudo env REPO_URL=https://github.com/YOUR_ACCOUNT/YOUR_REPO.git REPO_BRANCH="${REPO_BRANCH}" APP_DIR=/opt/pixelcraft COMPOSE_PROJECT_NAME=pixelcraft bash
+```
+
 ### 1. Set a secure secret key
 
 ```bash
@@ -138,6 +147,30 @@ EOF
 
 SQLite database and uploaded images live in named Docker volumes:
 
+The Lightsail and DigitalOcean deployment scripts automatically create a verified,
+timestamped database backup outside the Docker volume before starting containers.
+For the standard production settings, the script prints a path such as
+`/opt/pixelcraft/backups/pindou-20260712-153000.db`. It uses SQLite's online backup
+API and runs `PRAGMA integrity_check` against the destination; deployment aborts if
+either operation fails. At the start of a deployment attempt, it records the checkout
+that was running in `/opt/pixelcraft/.previous-deploy-commit` and marks the attempt
+in progress. The first verified backup is recorded in
+`/opt/pixelcraft/.rollback-backup`. A failed attempt leaves this checkpoint intact,
+so retries cannot replace either rollback pointer. Later retry backups are retained
+only as diagnostics. After health verification succeeds, the script records
+`.last-successful-deploy-commit` and clears the in-progress marker.
+
+The unified-account migration rotates `SECRET_KEY` once, after backup verification,
+and records that rotation in `.env`. This intentionally signs all users out once.
+Later routine deployments preserve the rotated key and do not sign users out again.
+
+For an existing installation, both production deploy scripts stop the public frontend
+and backend before taking the rollback backup. They then start only the private backend,
+run migrations, and verify `/health` from inside that container while public writes stay
+blocked. The full stack resumes only after that check passes. A failure before container
+replacement restarts whichever prior services were running; a later failure leaves the
+frontend stopped so the pinned commit and first verified backup can be restored safely.
+
 ```bash
 # Inspect volume location
 docker volume inspect pindou_pindou_data
@@ -150,6 +183,28 @@ docker cp $(docker compose ps -q backend):/app/data/backup.db ./backup.db
 docker cp ./backup.db $(docker compose ps -q backend):/app/data/pindou.db
 docker compose restart backend
 ```
+
+### Roll back a migration deployment
+
+Use the persisted rollback checkpoint from the failed deployment attempt. Do not
+select a newer diagnostic backup from a retry. If the pointer file is absent, the
+attempt began without an existing database and there is no database backup to
+restore.
+
+```bash
+set -e
+cd /opt/pixelcraft
+BACKUP="$(sudo cat /opt/pixelcraft/.rollback-backup)"
+PREVIOUS_COMMIT="$(sudo cat /opt/pixelcraft/.previous-deploy-commit)"
+sudo docker compose --project-name pixelcraft --env-file .env down
+MOUNTPOINT="$(sudo docker volume inspect pixelcraft_pindou_data --format '{{ .Mountpoint }}')"
+sudo install -m 0600 "${BACKUP}" "${MOUNTPOINT}/pindou.db"
+sudo git checkout "${PREVIOUS_COMMIT}"
+sudo docker compose --project-name pixelcraft --env-file .env up --build -d
+```
+
+Never use `docker compose down -v` during rollback: `-v` deletes the database and
+upload volumes.
 
 ---
 

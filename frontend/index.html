@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>FunLab 拼豆 — Member Portal</title>
+<title>FunLab AU — Pixel bead place for everyone</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -18,6 +18,14 @@ body {
   background: #FEF4F5;
   color: #1A1A18;
   overflow-x: hidden;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid rgba(107,181,232,0.52);
+  outline-offset: 3px;
 }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -38,6 +46,602 @@ body {
 
 input[type=range] { appearance: none; height:4px; background:#e8e6e1; border-radius:2px; outline:none; }
 input[type=range]::-webkit-slider-thumb { appearance:none; width:16px; height:16px; border-radius:50%; background:var(--accent,#F47A8A); cursor:pointer; }
+
+.site-shell {
+  min-height: calc(100vh - 60px);
+  background:
+    radial-gradient(circle at 18% 14%, rgba(244,122,138,0.18), transparent 28%),
+    radial-gradient(circle at 82% 12%, rgba(107,181,232,0.18), transparent 28%),
+    #FEF4F5;
+}
+.site-section {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 72px 28px;
+}
+.hero {
+  min-height: calc(100vh - 60px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(320px, 0.98fr);
+  align-items: center;
+  gap: 52px;
+  padding-top: 44px;
+  padding-bottom: 44px;
+}
+.hero h1 {
+  font-size: clamp(48px, 7vw, 94px);
+  line-height: 0.94;
+  letter-spacing: 0;
+  font-weight: 800;
+  max-width: 760px;
+}
+.hero p {
+  font-size: clamp(18px, 2vw, 23px);
+  line-height: 1.55;
+  color: #554D51;
+  max-width: 620px;
+  margin: 26px 0 32px;
+}
+.hero-actions,
+.section-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 13px 20px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.btn:hover { transform: translateY(-2px); }
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #F47A8A, #6BB5E8);
+  box-shadow: 0 12px 30px rgba(244,122,138,0.28);
+}
+.btn-secondary {
+  color: #1A1A18;
+  background: rgba(255,255,255,0.84);
+  border: 1px solid #E8E6E1;
+}
+.hero-card {
+  position: relative;
+  min-height: 520px;
+  border-radius: 24px;
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(232,230,225,0.9);
+  box-shadow: 0 28px 70px rgba(91,72,78,0.13);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero-logo {
+  width: min(74%, 390px);
+  aspect-ratio: 1;
+  border-radius: 42px;
+  object-fit: cover;
+  box-shadow: 0 20px 48px rgba(244,122,138,0.16);
+}
+.bead-orbit {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 -3px 6px rgba(26,26,24,0.1);
+}
+.bead-orbit:nth-child(1) { background:#F47A8A; top:48px; left:54px; }
+.bead-orbit:nth-child(2) { background:#6BB5E8; top:86px; right:72px; width:22px; height:22px; }
+.bead-orbit:nth-child(3) { background:#FFD16D; bottom:68px; left:82px; width:24px; height:24px; }
+.bead-orbit:nth-child(4) { background:#B79CDE; bottom:112px; right:48px; }
+.hero-strip {
+  position: absolute;
+  left: 26px;
+  right: 26px;
+  bottom: 26px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.hero-stat {
+  background: rgba(254,244,245,0.9);
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  padding: 12px;
+}
+.hero-stat strong {
+  display: block;
+  font-family: 'Space Mono', monospace;
+  font-size: 20px;
+  color: #1A1A18;
+  margin-bottom: 3px;
+}
+.hero-stat span { font-size: 12px; color: #776E72; font-weight: 700; }
+.section-title {
+  font-size: clamp(34px, 4vw, 56px);
+  line-height: 1.02;
+  letter-spacing: 0;
+  max-width: 760px;
+  margin-bottom: 18px;
+}
+.section-copy {
+  color: #635B5E;
+  font-size: 18px;
+  line-height: 1.7;
+  max-width: 710px;
+}
+.offer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 34px;
+}
+.offer-card {
+  background: #FFFFFF;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  padding: 24px;
+  min-height: 245px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.offer-card h3 {
+  font-size: 24px;
+  line-height: 1.1;
+  margin-bottom: 12px;
+}
+.offer-card p {
+  color: #675F62;
+  line-height: 1.58;
+  font-size: 15px;
+}
+.offer-card .code {
+  margin-top: 20px;
+  font-family: 'Space Mono', monospace;
+  color: #F47A8A;
+  font-weight: 700;
+  font-size: 12px;
+}
+.studio-band {
+  background: #fff;
+  border-top: 1px solid #E8E6E1;
+  border-bottom: 1px solid #E8E6E1;
+}
+.studio-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(320px, 1.15fr);
+  gap: 42px;
+  align-items: center;
+}
+.mosaic {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 6px;
+  background: #FEF4F5;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  padding: 18px;
+  aspect-ratio: 1.25;
+}
+.mosaic-cell {
+  border-radius: 4px;
+  min-height: 18px;
+  box-shadow: inset 0 -2px 0 rgba(26,26,24,0.08);
+}
+.steps {
+  display: grid;
+  gap: 14px;
+  margin-top: 30px;
+}
+.step {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.step-number {
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #F47A8A, #6BB5E8);
+  border-radius: 8px;
+  padding: 12px 0;
+  text-align: center;
+}
+.step h3 { font-size: 20px; margin-bottom: 5px; }
+.step p { color: #675F62; line-height: 1.55; }
+.visit-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.8fr);
+  gap: 22px;
+  align-items: stretch;
+}
+.visit-card {
+  background: #1A1A18;
+  color: #fff;
+  border-radius: 8px;
+  padding: clamp(28px, 4vw, 46px);
+}
+.visit-card p { color: rgba(255,255,255,0.76); line-height: 1.7; margin: 18px 0 26px; }
+.contact-list {
+  background: #fff;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  padding: 26px;
+}
+.contact-row {
+  padding: 16px 0;
+  border-bottom: 1px solid #F0EDEA;
+}
+.contact-row:last-child { border-bottom: 0; }
+.contact-row strong { display:block; margin-bottom:5px; }
+.contact-row span { color:#71696C; }
+.app-content { min-height: calc(100vh - 60px); }
+.top-nav { position: sticky; }
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 40px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+.account-menu-wrap { position: relative; }
+.account-trigger {
+  width: 36px;
+  height: 36px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #F47A8A, #6BB5E8);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.account-trigger:hover,
+.account-trigger[aria-expanded="true"] {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(244,122,138,0.28);
+}
+.account-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 260px;
+  padding: 10px;
+  border: 1px solid #E8E6E1;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(52,48,51,0.18);
+  animation: fadeIn 160ms ease forwards;
+}
+.account-summary {
+  padding: 8px 9px 12px;
+  border-bottom: 1px solid #F0EDEA;
+  margin-bottom: 8px;
+}
+.account-summary strong {
+  display: block;
+  color: #343033;
+  font-size: 14px;
+}
+.account-summary span {
+  display: block;
+  margin-top: 3px;
+  color: #7A7175;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-menu-action {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #A72F3D;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.account-menu-action:hover { background: #FFF1F2; }
+.notification-region {
+  position: fixed;
+  right: 20px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 500;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.app-notification {
+  border: 1px solid #E8E6E1;
+  border-left: 4px solid #6BB5E8;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(52,48,51,0.2);
+  color: #343033;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 12px 13px 14px;
+  pointer-events: auto;
+  animation: fadeIn 200ms ease forwards;
+}
+.app-notification.success { border-left-color: #2F9E71; }
+.app-notification.error { border-left-color: #D64555; }
+.app-notification-message { flex: 1; font-size: 14px; font-weight: 650; line-height: 1.45; }
+.notification-dismiss {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: #F5F3F1;
+  color: #6F666B;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mobile-menu-button {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  background: #fff;
+  color: #343033;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mobile-menu-button span,
+.mobile-menu-button span::before,
+.mobile-menu-button span::after {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  content: '';
+}
+.mobile-menu-button span {
+  position: relative;
+}
+.mobile-menu-button span::before,
+.mobile-menu-button span::after {
+  position: absolute;
+  left: 0;
+}
+.mobile-menu-button span::before { top: -6px; }
+.mobile-menu-button span::after { top: 6px; }
+.mobile-drawer-overlay { display: none; }
+.mobile-nav-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(326px, 88vw);
+  background: #fff;
+  box-shadow: -20px 0 56px rgba(52,48,51,0.18);
+  transform: translateX(100%);
+  transition: transform 220ms ease;
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+}
+.mobile-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #F0EDEA;
+}
+.mobile-drawer-close {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #E8E6E1;
+  border-radius: 8px;
+  background: #fff;
+  color: #343033;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mobile-drawer-items {
+  display: grid;
+  gap: 8px;
+  padding: 18px 0;
+}
+.mobile-drawer-items button {
+  min-height: 50px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #3F393D;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-family: inherit;
+  font-weight: 750;
+  font-size: 15px;
+  cursor: pointer;
+}
+.mobile-drawer-items button.active {
+  background: rgba(244,122,138,0.13);
+  color: #F47A8A;
+}
+.mobile-drawer-auth {
+  margin-top: auto;
+  border-top: 1px solid #F0EDEA;
+  padding-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+.mobile-drawer-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #6F666B;
+  font-size: 13px;
+}
+.page-shell { min-height: calc(100vh - 60px); padding: 40px; }
+.page-inner { max-width: 1180px; margin: 0 auto; }
+.page-header { margin-bottom: 28px; }
+.library-toolbar { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; align-items: center; }
+.filter-chips { display: flex; gap: 6px; }
+.pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+.pattern-card { background: #fff; border-radius: 8px; overflow: hidden; cursor: pointer; }
+.viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26,26,24,0.7);
+  backdrop-filter: blur(6px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.viewer-modal {
+  background: #fff;
+  border-radius: 20px;
+  width: min(920px, 95vw);
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.25);
+}
+.viewer-header { padding: 18px 24px; border-bottom: 1px solid #f0ede8; display: flex; align-items: center; gap: 16px; }
+.viewer-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+.viewer-grid-area { flex: 1; overflow: auto; padding: 24px; }
+.viewer-legend { width: 200px; border-left: 1px solid #f0ede8; padding: 20px 16px; overflow: auto; flex-shrink: 0; }
+.viewer-actions { display: grid; gap: 8px; margin-top: 16px; }
+.admin-layout { display: grid; grid-template-columns: 1fr 380px; gap: 24px; max-width: 960px; }
+.admin-action-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.membership-grid,
+.member-portal-grid,
+.member-profile-grid { min-width: 0; }
+@media (max-width: 900px) {
+  .hero,
+  .studio-layout,
+  .visit-panel { grid-template-columns: 1fr; }
+  .hero { min-height: auto; }
+  .hero-card { min-height: 430px; }
+  .offer-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .site-section { padding: 52px 18px; }
+  .hero h1 { font-size: 44px; }
+  .hero-strip { grid-template-columns: 1fr; position: static; margin: 18px; width: calc(100% - 36px); }
+  .hero-card { min-height: auto; padding-top: 42px; flex-direction: column; }
+  .hero-logo { width: min(72vw, 290px); }
+}
+@media (max-width: 720px) {
+  .top-nav {
+    height: 56px !important;
+    padding: 0 14px !important;
+  }
+  .nav-brand { margin-right: 0 !important; }
+  .desktop-nav-links { display: none !important; }
+  .desktop-auth-actions { display: none !important; }
+  .mobile-menu-button { display: flex; margin-left: auto; }
+  .notification-region { right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); }
+  .app-content { padding-bottom: 0; }
+  .mobile-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    display: block;
+    background: rgba(26,26,24,0.42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+  .mobile-drawer-overlay.mobile-drawer-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .mobile-drawer-overlay.mobile-drawer-open .mobile-nav-drawer {
+    transform: translateX(0);
+  }
+  .site-section { padding: 38px 16px; }
+  .hero { gap: 28px; padding-top: 26px; }
+  .hero h1 { font-size: 36px; line-height: 1.02; }
+  .hero p { font-size: 15px; line-height: 1.55; margin: 18px 0 22px; }
+  .hero-card { border-radius: 18px; }
+  .offer-card { min-height: auto; padding: 20px; }
+  .visit-card,
+  .contact-list { padding: 22px; }
+  .page-shell { padding: 24px 16px !important; }
+  .page-header { margin-bottom: 20px !important; }
+  .page-header h1 { font-size: 30px !important; line-height: 1.02 !important; }
+  .library-toolbar { gap: 10px !important; margin-bottom: 20px !important; }
+  .library-toolbar > * { width: 100%; max-width: none !important; }
+  .filter-chips {
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+  .filter-chips button { flex: 0 0 auto; min-height: 40px; }
+  .pattern-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
+  .pattern-card {
+    display: grid;
+    grid-template-columns: 128px 1fr;
+    min-height: 150px;
+  }
+  .pattern-card > div:first-child { height: auto !important; min-height: 150px; }
+  .pattern-card canvas { max-width: 112px; max-height: 112px; }
+  .viewer-overlay { align-items: stretch; padding: 0; }
+  .viewer-modal { width: 100vw; max-height: none; height: 100dvh; border-radius: 0; }
+  .viewer-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+  }
+  .viewer-body { display: block; overflow: auto; background: #f8f7f4; }
+  .viewer-grid-area { padding: 14px 14px 96px; overflow: auto; }
+  .viewer-legend { width: auto; border-left: 0; border-top: 1px solid #f0ede8; background: #fff; }
+  .viewer-actions {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    padding-top: 8px;
+  }
+  .admin-layout { grid-template-columns: 1fr !important; max-width: none !important; }
+  .admin-action-row > button { min-width: 140px; }
+  .membership-grid,
+  .member-portal-grid,
+  .member-profile-grid { grid-template-columns: 1fr !important; }
+}
 </style>
 </head>
 <body>
@@ -55,6 +659,8 @@ const T = {
 };
 
 const AI_ENHANCEMENT_ENABLED = false;
+const READY_GRID_IMPORT_MODE = 'ready_grid_codes';
+const PHOTO_IMPORT_MODE = 'photo_convert';
 
 // ─── API HELPERS ──────────────────────────────────────────────────────────────
 const API_BASE = '/api';
@@ -72,6 +678,34 @@ async function apiFetch(path, options = {}) {
     console.error('API error:', err);
     return null;
   }
+}
+
+function storeAccountSession(account, token) {
+  localStorage.setItem('pc_token', token);
+  localStorage.setItem('pc_user', JSON.stringify(account));
+  return account;
+}
+
+function clearAccountSession() {
+  localStorage.removeItem('pc_token');
+  localStorage.removeItem('pc_user');
+}
+
+let qrDecoderPromise = null;
+async function loadQrDecoder() {
+  if (window.jsQR) return window.jsQR;
+  if (!qrDecoderPromise) {
+    qrDecoderPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+      script.async = true;
+      script.crossOrigin = 'anonymous';
+      script.onload = () => window.jsQR ? resolve(window.jsQR) : reject(new Error('QR decoder did not load.'));
+      script.onerror = () => reject(new Error('Unable to load QR decoder.'));
+      document.head.appendChild(script);
+    });
+  }
+  return qrDecoderPromise;
 }
 
 function normalizePattern(p) {
@@ -108,6 +742,72 @@ function generateGrid(w, h, palette) {
   );
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeHexColor(value, fallback = '#E8E6E1') {
+  const color = String(value || '').trim();
+  return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color) ? color : fallback;
+}
+
+function formatDuration(totalSeconds) {
+  const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  return [hours, minutes, seconds].map(v => String(v).padStart(2, '0')).join(':');
+}
+
+function formatHours(totalSeconds) {
+  const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  if (hours && minutes) return `${hours}h ${minutes}m`;
+  if (hours) return `${hours}h`;
+  return `${minutes}m`;
+}
+
+function formatDateInput(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function calculateChargedSeconds(occupiedSeconds) {
+  const occupied = Math.max(0, Math.floor(Number(occupiedSeconds) || 0));
+  if (occupied === 0) return 0;
+  if (occupied <= 3600) return 3600;
+  const remaining = occupied - 3600;
+  let blocks = Math.floor(remaining / 1800);
+  if (remaining % 1800 > 600) blocks += 1;
+  return 3600 + blocks * 1800;
+}
+
+function parseDurationInput(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 0;
+  if (/^\d+$/.test(raw)) return Number(raw);
+  const parts = raw.split(':').map(v => Number(v));
+  if (parts.some(v => !Number.isFinite(v) || v < 0)) return 0;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
+
 // ─── SHARED UI PIECES ─────────────────────────────────────────────────────────
 function Spinner({ size = 16, color = '#aaa' }) {
   return (
@@ -119,7 +819,22 @@ function Spinner({ size = 16, color = '#aaa' }) {
   );
 }
 
-function PixelGridPreview({ color, w, h }) {
+function AppNotification({ notification, onDismiss }) {
+  if (!notification) return null;
+  return (
+    <div className="notification-region" aria-live="polite" aria-atomic="true">
+      <div
+        className={`app-notification ${notification.tone || 'info'}`}
+        role={notification.tone === 'error' ? 'alert' : 'status'}
+      >
+        <span className="app-notification-message">{notification.message}</span>
+        <button className="notification-dismiss" type="button" onClick={onDismiss} aria-label="Dismiss notification">&times;</button>
+      </div>
+    </div>
+  );
+}
+
+function PixelGridPreview({ color, w, h, gridData, palette }) {
   const ref = useRef();
   const size = 160;
   useEffect(() => {
@@ -127,6 +842,31 @@ function PixelGridPreview({ color, w, h }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, size, size);
+    const hasGrid = Array.isArray(gridData) && gridData.length > 0 && Array.isArray(gridData[0]);
+    const rows = hasGrid ? gridData.length : h;
+    const cols = hasGrid ? gridData[0].length : w;
+    const drawRows = rows;
+    const drawCols = cols;
+    const cell = size / Math.max(drawRows, drawCols);
+    const offsetX = (size - drawCols * cell) / 2;
+    const offsetY = (size - drawRows * cell) / 2;
+
+    if (hasGrid) {
+      const paletteById = new Map((palette || []).map(c => [c.id, c.hex]));
+      ctx.fillStyle = '#f0ede8';
+      ctx.fillRect(offsetX, offsetY, drawCols * cell, drawRows * cell);
+      for (let y = 0; y < drawRows; y++) {
+        for (let x = 0; x < drawCols; x++) {
+          const beadId = gridData[y]?.[x];
+          if (beadId) {
+            ctx.fillStyle = paletteById.get(beadId) || color || '#CC2936';
+            ctx.fillRect(offsetX + x * cell + 0.5, offsetY + y * cell + 0.5, Math.max(cell - 1, 1), Math.max(cell - 1, 1));
+          }
+        }
+      }
+      return;
+    }
+
     const cw = size/Math.min(w,20), ch = size/Math.min(h,20);
     for (let y = 0; y < Math.min(h,20); y++) {
       for (let x = 0; x < Math.min(w,20); x++) {
@@ -135,7 +875,7 @@ function PixelGridPreview({ color, w, h }) {
         ctx.fillRect(x*cw+0.5, y*ch+0.5, cw-1, ch-1);
       }
     }
-  }, [color, w, h]);
+  }, [color, w, h, gridData, palette]);
   return <canvas ref={ref} width={size} height={size} style={{imageRendering:'pixelated',opacity:0.9}}/>;
 }
 
@@ -166,14 +906,32 @@ function ConversionPreview({ result, maxSize = 160 }) {
 }
 
 // ─── PATTERN CARD ─────────────────────────────────────────────────────────────
-function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
+function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn, isAdmin, onDelete }) {
   const [hover, setHover] = useState(false);
   const sizeColor = { Small:'#10B981', Medium:'#F5A623', Large:'#F47A8A' }[pattern.size];
+  const confirmDelete = (event) => {
+    event.stopPropagation();
+    if (!isAdmin || !onDelete) return;
+    if (window.confirm(`Delete ${pattern.title}? This cannot be undone.`)) {
+      onDelete(pattern.id);
+    }
+  };
   return (
     <div
+      className="pattern-card"
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${pattern.title}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={() => onOpen(pattern)}
+      onKeyDown={event => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen(pattern);
+        }
+      }}
       style={{
         background: '#fff', borderRadius: T.cardRadius, overflow: 'hidden', cursor: 'pointer',
         border: hover ? `2px solid ${T.accentRed}` : '2px solid transparent',
@@ -182,10 +940,12 @@ function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
         boxShadow: hover ? '0 8px 24px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.06)',
       }}>
       <div style={{height:160, background:`${pattern.preview_color}18`, display:'flex', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden'}}>
-        <PixelGridPreview color={pattern.preview_color} w={pattern.gridW} h={pattern.gridH}/>
+        <PixelGridPreview color={pattern.preview_color} w={pattern.gridW} h={pattern.gridH} gridData={pattern.grid_data} palette={pattern.palette}/>
         <div style={{position:'absolute',top:10,right:10}}>
           <button
-            onClick={e => { e.stopPropagation(); if(!isLoggedIn) return; onFave(pattern.id); }}
+            onClick={e => { e.stopPropagation(); onFave(pattern.id); }}
+            aria-label={isFaved ? `Remove ${pattern.title} from saved patterns` : `Save ${pattern.title}`}
+            aria-pressed={isFaved ? 'true' : 'false'}
             style={{
               background: isFaved ? T.accentRed : 'rgba(255,255,255,0.9)',
               border:'none', borderRadius:'50%', width:32, height:32,
@@ -201,6 +961,38 @@ function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
         <div style={{position:'absolute',top:10,left:10}}>
           <span style={{background:sizeColor,color:'#fff',fontSize:10,fontWeight:700,letterSpacing:'.06em',padding:'3px 8px',borderRadius:20,fontFamily:'Space Mono,monospace'}}>{pattern.size.toUpperCase()}</span>
         </div>
+        {isAdmin && (
+          <div style={{position:'absolute',bottom:10,right:10}}>
+            <button
+              onClick={confirmDelete}
+              title="Delete pattern"
+              aria-label={`Delete ${pattern.title}`}
+              style={{
+                background:'#fff',
+                color:'#B91C1C',
+                border:'1px solid rgba(185,28,28,0.24)',
+                borderRadius:8,
+                padding:'6px 9px',
+                cursor:'pointer',
+                display:'flex',
+                alignItems:'center',
+                gap:5,
+                fontSize:11,
+                fontWeight:800,
+                fontFamily:'inherit',
+                boxShadow:'0 2px 8px rgba(0,0,0,0.15)'
+              }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M8 6V4h8v2"/>
+                <path d="M19 6l-1 14H6L5 6"/>
+                <path d="M10 11v5"/>
+                <path d="M14 11v5"/>
+              </svg>
+              Delete
+            </button>
+          </div>
+        )}
       </div>
       <div style={{padding:'14px 16px 16px'}}>
         <div style={{fontWeight:700,fontSize:15,marginBottom:6}}>{pattern.title}</div>
@@ -223,27 +1015,53 @@ function PatternCard({ pattern, onOpen, isFaved, onFave, isLoggedIn }) {
 }
 
 // ─── NAVBAR ──────────────────────────────────────────────────────────────────
-function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
+function Navbar({ page, setPage, user, onLoginClick, onLogout, onMobileMenuClick, mobileMenuOpen }) {
   const isLoggedIn = !!user;
   const isAdmin = user?.is_admin;
   const initial = user?.name ? user.name[0].toUpperCase() : 'U';
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const closeOnOutsideClick = event => {
+      if (!accountMenuRef.current?.contains(event.target)) setAccountMenuOpen(false);
+    };
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setAccountMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [accountMenuOpen]);
+
+  useEffect(() => { setAccountMenuOpen(false); }, [page]);
+
+  const signOut = () => {
+    setAccountMenuOpen(false);
+    onLogout();
+  };
+
   return (
-    <nav style={{
+    <nav className="top-nav" style={{
       position:'sticky',top:0,zIndex:100,
       background:'rgba(250,250,248,0.92)',backdropFilter:'blur(12px)',
       borderBottom:'1px solid #e8e6e1',
       display:'flex',alignItems:'center',padding:'0 32px',height:60,
     }}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginRight:40,cursor:'pointer'}} onClick={() => setPage('gallery')}>
+      <button className="nav-brand" type="button" onClick={() => setPage('home')} aria-label="Go to home">
         <div style={{width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0}}>
-          <img src="/funlab-logo.jpeg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab" onError={e=>e.target.style.display='none'}/>
+          <img src="/logo.jpg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab AU" onError={e=>e.target.style.display='none'}/>
         </div>
         <span style={{fontWeight:800,fontSize:17,letterSpacing:'-0.02em'}}>
-          <span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>拼豆</span>
+          <span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span>
         </span>
-      </div>
-      <div style={{display:'flex',gap:4,flex:1}}>
-        {[['gallery','Browse'],['favorites','My Favorites']].map(([id,label]) => (
+      </button>
+      <div className="desktop-nav-links" style={{display:'flex',gap:4,flex:1}}>
+        {[['home','Home'],['gallery','Library'],['favorites','Saved'],['timetable','Time Table'],['membership','Membership']].map(([id,label]) => (
           <button key={id} onClick={() => setPage(id)} style={{
             background: page===id ? `${T.accentRed}15` : 'transparent',
             color: page===id ? T.accentRed : '#555',
@@ -260,30 +1078,245 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout }) {
           }}>Admin</button>
         )}
       </div>
-      {isLoggedIn ? (
-        <div style={{display:'flex',alignItems:'center',gap:12}}>
-          {isAdmin && (
-            <span style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',background:T.accentOrange,color:'#fff',padding:'3px 8px',borderRadius:20}}>ADMIN</span>
-          )}
-          <div style={{
-            width:34,height:34,borderRadius:'50%',
-            background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
-            display:'flex',alignItems:'center',justifyContent:'center',
-            color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer',userSelect:'none'
-          }} onClick={onLogout} title={`Logged in as ${user.name} — click to logout`}>{initial}</div>
-        </div>
-      ) : (
-        <button onClick={onLoginClick} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Sign In</button>
-      )}
+      <button
+        className="mobile-menu-button"
+        type="button"
+        onClick={onMobileMenuClick}
+        aria-label="Open navigation"
+        aria-expanded={mobileMenuOpen ? 'true' : 'false'}
+      >
+        <span aria-hidden="true"></span>
+      </button>
+      <div className="desktop-auth-actions" style={{display:'flex',alignItems:'center',gap:12}}>
+        {isLoggedIn ? (
+          <>
+            {isAdmin && (
+              <span style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',background:T.accentOrange,color:'#fff',padding:'3px 8px',borderRadius:20}}>ADMIN</span>
+            )}
+            <div className="account-menu-wrap" ref={accountMenuRef}>
+              <button
+                className="account-trigger"
+                type="button"
+                onClick={() => setAccountMenuOpen(open => !open)}
+                aria-label="Open account menu"
+                aria-haspopup="menu"
+                aria-expanded={accountMenuOpen ? 'true' : 'false'}
+                title={`Account: ${user.name}`}
+              >
+                {initial}
+              </button>
+              {accountMenuOpen && (
+                <div className="account-popover" role="menu" aria-label="Account options">
+                  <div className="account-summary">
+                    <strong>{user.name}</strong>
+                    <span>{user.email}</span>
+                    <span>{isAdmin ? 'Administrator' : 'Member'}</span>
+                  </div>
+                  <button className="account-menu-action" type="button" role="menuitem" onClick={signOut}>
+                    <span>Sign out</span><span aria-hidden="true">→</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <button onClick={onLoginClick} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'8px 20px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Member Sign In</button>
+        )}
+      </div>
     </nav>
   );
 }
 
+function MobileNavDrawer({ page, setPage, user, onLoginClick, onLogout, open, onClose }) {
+  const isAdmin = user?.is_admin;
+  const initial = user?.name ? user.name[0].toUpperCase() : 'U';
+  const items = [
+    ['home', 'Home'],
+    ['gallery', 'Library'],
+    ['favorites', 'Saved'],
+    ['timetable', 'Time Table'],
+    ['membership', 'Membership'],
+  ];
+  if (isAdmin) items.push(['admin', 'Admin']);
+
+  const goToPage = (id) => {
+    setPage(id);
+    onClose();
+  };
+
+  const openLogin = () => {
+    onClose();
+    onLoginClick();
+  };
+
+  const logout = () => {
+    onClose();
+    onLogout();
+  };
+
+  return (
+    <div
+      className={`mobile-drawer-overlay ${open ? 'mobile-drawer-open' : ''}`}
+      aria-hidden={open ? 'false' : 'true'}
+      onClick={onClose}
+    >
+      <aside className="mobile-nav-drawer mobile-drawer-panel" aria-label="Mobile navigation drawer" onClick={e => e.stopPropagation()}>
+        <div className="mobile-drawer-header">
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0}}>
+              <img src="/logo.jpg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab AU" onError={e=>e.target.style.display='none'}/>
+            </div>
+            <span style={{fontWeight:800,fontSize:17}}>
+              <span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span>
+            </span>
+          </div>
+          <button className="mobile-drawer-close" type="button" onClick={onClose} aria-label="Close navigation">&times;</button>
+        </div>
+
+        <div className="mobile-drawer-items">
+          {items.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => goToPage(id)} className={page === id ? 'active' : ''}>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mobile-drawer-auth">
+          {user ? (
+            <>
+              <div className="mobile-drawer-user">
+                <div style={{
+                  width:34,height:34,borderRadius:'50%',
+                  background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,
+                  display:'flex',alignItems:'center',justifyContent:'center',
+                  color:'#fff',fontWeight:800,fontSize:13,flexShrink:0
+                }}>{initial}</div>
+                <div>
+                  <strong style={{display:'block',color:'#343033',fontSize:14}}>{user.name}</strong>
+                  <span>{isAdmin ? 'Admin account' : 'Member account'}</span>
+                </div>
+              </div>
+              <button className="btn btn-secondary" type="button" onClick={logout}>Sign Out</button>
+            </>
+          ) : (
+            <button className="btn btn-primary" type="button" onClick={openLogin}>Member Sign In</button>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+// ─── PUBLIC OFFICIAL WEBSITE ─────────────────────────────────────────────────
+function OfficialHome({ setPage, onLoginClick }) {
+  const mosaicColors = ['#F47A8A','#6BB5E8','#FFD16D','#B79CDE','#F9A7B3','#8DD8C8','#FFFFFF','#F47A8A','#6BB5E8','#FFD16D'];
+  return (
+    <main className="site-shell pixel-bg">
+      <section className="site-section hero">
+        <div>
+          <h1>FunLab AU is a pixel bead place for everyone.</h1>
+          <p>Drop in, slow down, and turn tiny beads into colourful keepsakes. We make Perler-style pixel craft easy for first-timers, families, friends, date nights, birthday groups, and makers who already know exactly what they want to build.</p>
+          <div className="hero-actions">
+            <button className="btn btn-primary" onClick={() => setPage('gallery')}>Explore Bead Patterns</button>
+            <button className="btn btn-secondary" onClick={onLoginClick}>Join as a Member</button>
+          </div>
+        </div>
+        <div className="hero-card" aria-label="FunLab AU brand preview">
+          <span className="bead-orbit"></span>
+          <span className="bead-orbit"></span>
+          <span className="bead-orbit"></span>
+          <span className="bead-orbit"></span>
+          <img className="hero-logo" src="/logo.jpg" alt="FunLab AU logo"/>
+          <div className="hero-strip">
+            <div className="hero-stat"><strong>All ages</strong><span>guided craft tables</span></div>
+            <div className="hero-stat"><strong>Bead art</strong><span>pixel bead making</span></div>
+            <div className="hero-stat"><strong>AU</strong><span>made for locals</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="site-section">
+        <h2 className="section-title">A bright studio for small beads, big ideas, and easy creative wins.</h2>
+        <p className="section-copy">FunLab AU helps guests choose a pattern, match bead colours, build at their own pace, and leave with a finished piece they actually want to show off. The experience is welcoming, hands-on, and simple enough for beginners without feeling basic for regular makers.</p>
+        <div className="offer-grid">
+          <article className="offer-card">
+            <div>
+              <h3>Walk-in making</h3>
+              <p>Pick a design, sit at a prepared bead station, and make something cute without needing your own tools or colour boxes.</p>
+            </div>
+            <div className="code">NO EXPERIENCE NEEDED</div>
+          </article>
+          <article className="offer-card">
+            <div>
+              <h3>Group sessions</h3>
+              <p>Host birthdays, family afternoons, school holiday plans, team catchups, and friend dates around a calm shared activity.</p>
+            </div>
+            <div className="code">PARTIES + WORKSHOPS</div>
+          </article>
+          <article className="offer-card">
+            <div>
+              <h3>Custom patterns</h3>
+              <p>Turn favourite photos, characters, logos, pets, or gifts into bead-ready grids using the FunLab pattern library and converter.</p>
+            </div>
+            <div className="code">IMAGE TO BEAD GRID</div>
+          </article>
+        </div>
+      </section>
+
+      <section className="studio-band">
+        <div className="site-section studio-layout">
+          <div>
+            <h2 className="section-title">From idea to bead map in three simple steps.</h2>
+            <p className="section-copy">The site connects the official FunLab AU brand page with the existing member library, so visitors can discover the studio and then jump straight into saved patterns and bead maps.</p>
+            <div className="steps">
+              <div className="step">
+                <div className="step-number">01</div>
+                <div><h3>Choose your vibe</h3><p>Browse cute, pop, animal, floral, game-inspired, and giftable designs.</p></div>
+              </div>
+              <div className="step">
+                <div className="step-number">02</div>
+                <div><h3>Build colour by colour</h3><p>Follow the bead grid, check off progress, and keep your palette organised.</p></div>
+              </div>
+              <div className="step">
+                <div className="step-number">03</div>
+                <div><h3>Take home your piece</h3><p>Finish with a display-ready creation made by hand, one bead at a time.</p></div>
+              </div>
+            </div>
+          </div>
+          <div className="mosaic" aria-hidden="true">
+            {Array.from({length: 120}).map((_, i) => (
+              <span key={i} className="mosaic-cell" style={{background:mosaicColors[(i + Math.floor(i / 12) * 2) % mosaicColors.length], opacity: (i % 7 === 0 || i % 11 === 0) ? 0.45 : 1}}></span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="site-section visit-panel">
+        <div className="visit-card">
+          <h2 className="section-title" style={{color:'#fff',marginBottom:0}}>Ready to make something small and unforgettable?</h2>
+          <p>Visit the pattern library, sign in to save favourites, or use the admin tools to publish new bead maps for the FunLab AU community.</p>
+          <div className="section-actions">
+            <button className="btn btn-primary" onClick={() => setPage('gallery')}>Open Library</button>
+            <button className="btn btn-secondary" onClick={onLoginClick}>Member Access</button>
+          </div>
+        </div>
+        <aside className="contact-list" aria-label="FunLab AU visit information">
+          <div className="contact-row"><strong>Experience</strong><span>Pixel bead / Perler bead art studio for everyone</span></div>
+          <div className="contact-row"><strong>Best for</strong><span>Kids, adults, dates, families, parties, creative workshops</span></div>
+          <div className="contact-row"><strong>What to bring</strong><span>Your idea. We handle beads, grids, tools, and guidance.</span></div>
+          <div className="contact-row"><strong>Online</strong><span>Browse patterns, save favourites, and prepare custom bead maps.</span></div>
+        </aside>
+      </section>
+    </main>
+  );
+}
+
 // ─── GALLERY PAGE ─────────────────────────────────────────────────────────────
-function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
+function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user, onPatternDeleted }) {
   const [search, setSearch] = useState('');
   const [sizeFilter, setSizeFilter] = useState('All');
   const isLoggedIn = !!user;
+  const isAdmin = !!user?.is_admin;
 
   const filtered = patterns.filter(p => {
     const matchSearch = !search ||
@@ -294,14 +1327,15 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
   });
 
   return (
-    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
-      <div style={{marginBottom:32}}>
+    <div className="page-shell gallery-page pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div className="page-inner">
+      <div className="page-header" style={{marginBottom:32}}>
         <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>
           Discover <span style={{color:T.accentRed}}>Bead Patterns</span>
         </h1>
         <p style={{color:'#888',fontSize:15}}>Convert your favorite images into beautiful pixel bead art</p>
       </div>
-      <div style={{display:'flex',gap:12,marginBottom:32,flexWrap:'wrap',alignItems:'center'}}>
+      <div className="library-toolbar" style={{display:'flex',gap:12,marginBottom:32,flexWrap:'wrap',alignItems:'center'}}>
         <div style={{display:'flex',alignItems:'center',gap:10,background:'#fff',border:'2px solid #e8e6e1',borderRadius:12,padding:'10px 16px',flex:1,maxWidth:400,transition:'border-color 0.15s'}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.5">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
@@ -309,9 +1343,9 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
           <input value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="Search patterns… e.g. Mario, Flower"
             style={{border:'none',outline:'none',fontSize:14,background:'transparent',width:'100%',fontFamily:'inherit',color:'#1A1A18'}}/>
-          {search && <button onClick={()=>setSearch('')} style={{background:'none',border:'none',cursor:'pointer',color:'#aaa',fontSize:16,lineHeight:1}}>×</button>}
+          {search && <button onClick={()=>setSearch('')} aria-label="Clear pattern search" style={{background:'none',border:'none',cursor:'pointer',color:'#777',fontSize:16,lineHeight:1}}>×</button>}
         </div>
-        <div style={{display:'flex',gap:6}}>
+        <div className="filter-chips" style={{display:'flex',gap:6}}>
           {['All','Small','Medium','Large'].map(s => (
             <button key={s} onClick={()=>setSizeFilter(s)} style={{
               background: sizeFilter===s ? T.accentRed : '#fff',
@@ -328,10 +1362,10 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
           }
         </span>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
+      <div className="pattern-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
         {filtered.map(p => (
           <div key={p.id} className="fade-in">
-            <PatternCard pattern={p} onOpen={onOpen} isFaved={favIds.has(p.id)} onFave={onFave} isLoggedIn={isLoggedIn}/>
+            <PatternCard pattern={p} onOpen={onOpen} isFaved={favIds.has(p.id)} onFave={onFave} isLoggedIn={isLoggedIn} isAdmin={isAdmin} onDelete={onPatternDeleted}/>
           </div>
         ))}
         {!loading && filtered.length === 0 && (
@@ -342,19 +1376,29 @@ function GalleryPage({ patterns, loading, favIds, onFave, onOpen, user }) {
           </div>
         )}
       </div>
+      </div>
     </div>
   );
 }
 
 // ─── BEAD MAP VIEWER ──────────────────────────────────────────────────────────
-function BeadMapViewer({ pattern, onClose, user }) {
+function BeadMapViewer({ pattern, onClose, user, notify }) {
   const isLoggedIn = !!user;
+  const isAdmin = !!user?.is_admin;
   const [crossed, setCrossed] = useState(new Set());
   const [zoom, setZoom] = useState(1);
   const [highlight, setHighlight] = useState(null);
   const gridData = pattern.grid_data || generateGrid(pattern.gridW, pattern.gridH, pattern.palette);
   const cellSize = Math.min(Math.floor(460 / pattern.gridW), 24);
   const palette = pattern.palette || [];
+
+  useEffect(() => {
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
 
   const toggle = (key) => {
     if (!isLoggedIn) return;
@@ -365,18 +1409,134 @@ function BeadMapViewer({ pattern, onClose, user }) {
     });
   };
 
+  const resetProgress = () => {
+    if (!window.confirm('Reset all progress for this pattern?')) return;
+    setCrossed(new Set());
+    notify('Progress reset.', 'success');
+  };
+
   const usedColors = {};
   gridData.flat().forEach(id => { if (id) usedColors[id] = (usedColors[id]||0)+1; });
   const totalBeads = pattern.gridW * pattern.gridH;
   const doneBeads = crossed.size;
+  const paletteById = new Map(palette.map(bead => [bead.id, bead]));
+
+  const buildGridRowsHtml = (size, showLabels = false) => gridData.map((row, y) => (
+    `<div class="grid-row">${row.map((beadId, x) => {
+      const bead = paletteById.get(beadId) || {id: beadId, name: beadId, hex: '#e0e0e0'};
+      const empty = !beadId;
+      const label = showLabels && beadId ? escapeHtml(beadId) : '';
+      return `<div class="grid-cell${empty ? ' empty' : ''}" title="${escapeHtml(`${x + 1},${y + 1} ${bead.name || beadId || 'Empty'}`)}" style="width:${size}px;height:${size}px;background:${empty ? '#F8F7F4' : safeHexColor(bead.hex)}">${label}</div>`;
+    }).join('')}</div>`
+  )).join('');
+
+  const buildLegendHtml = () => Object.entries(usedColors).map(([id, count]) => {
+    const bead = paletteById.get(id) || {id, name:id, hex:'#e0e0e0'};
+    return `<div class="legend-item"><span class="swatch" style="background:${safeHexColor(bead.hex)}"></span><span><strong>${escapeHtml(bead.name || id)}</strong><small>${escapeHtml(id)} · ${count} beads</small></span></div>`;
+  }).join('');
+
+  const openGridFullscreenTab = () => {
+    const fullscreenWindow = window.open('', '_blank');
+    if (!fullscreenWindow) {
+      notify('Please allow pop-ups to open the fullscreen grid.', 'error');
+      return;
+    }
+    fullscreenWindow.opener = null;
+    fullscreenWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>${escapeHtml(pattern.title)} fullscreen grid</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{font-family:'Space Grotesk',sans-serif;background:#171716;color:#fff;overflow:hidden}.toolbar{position:fixed;top:0;left:0;right:0;height:58px;background:rgba(26,26,24,.94);border-bottom:1px solid rgba(255,255,255,.12);display:flex;align-items:center;gap:10px;padding:0 18px;z-index:2}.title{min-width:0;flex:1}.title strong{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.title span{display:block;font:700 11px 'Space Mono',monospace;color:#aaa;margin-top:2px}.toolbar button{border:1px solid rgba(255,255,255,.18);background:#242423;color:#fff;border-radius:8px;padding:8px 12px;font:700 12px 'Space Grotesk',sans-serif;cursor:pointer}.toolbar button:hover{border-color:#F47A8A;color:#F47A8A}.viewport{position:fixed;inset:58px 0 0;overflow:hidden;cursor:grab;touch-action:none}.viewport.dragging{cursor:grabbing}.stage{position:absolute;left:0;top:0;transform-origin:0 0}.grid{display:inline-block;background:#fff;border:1px solid rgba(255,255,255,.2);box-shadow:0 20px 70px rgba(0,0,0,.35)}.grid-row{display:flex}.grid-cell{flex:0 0 auto;border:.5px solid rgba(0,0,0,.1);font:700 9px 'Space Mono',monospace;color:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;overflow:hidden}.grid-cell.empty{background:#f8f7f4}.hint{color:#bdbdb8;font-size:12px;margin-left:6px}@media(max-width:640px){.toolbar{height:auto;min-height:58px;flex-wrap:wrap;padding:10px}.viewport{inset:78px 0 0}.hint{display:none}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <div class="title"><strong>${escapeHtml(pattern.title)}</strong><span>${pattern.gridW}x${pattern.gridH} beads · ${Object.keys(usedColors).length} colors</span></div>
+  <button type="button" data-action="zoom-out">Zoom -</button>
+  <button type="button" data-action="zoom-in">Zoom +</button>
+  <button type="button" data-action="reset">Reset</button>
+  <button type="button" data-action="close">Close</button>
+  <span class="hint">Drag to pan. Scroll to zoom.</span>
+</div>
+<div class="viewport">
+  <div class="stage">
+    <div class="grid">${buildGridRowsHtml(18, pattern.gridW <= 60 && pattern.gridH <= 60)}</div>
+  </div>
+</div>
+<script>
+const viewport = document.querySelector('.viewport');
+const stage = document.querySelector('.stage');
+let scale = 1;
+let originX = 0;
+let originY = 0;
+let startX = 0;
+let startY = 0;
+let isDragging = false;
+function render(){ stage.style.transform = 'translate(' + originX + 'px,' + originY + 'px) scale(' + scale + ')'; }
+function centerGrid(){ const box = stage.getBoundingClientRect(); originX = Math.max(24, (viewport.clientWidth - box.width) / 2); originY = Math.max(24, (viewport.clientHeight - box.height) / 2); render(); }
+function zoomBy(delta, clientX = viewport.clientWidth / 2, clientY = viewport.clientHeight / 2){ const next = Math.min(5, Math.max(0.25, scale + delta)); const rect = viewport.getBoundingClientRect(); const px = clientX - rect.left - originX; const py = clientY - rect.top - originY; originX -= px * (next / scale - 1); originY -= py * (next / scale - 1); scale = next; render(); }
+document.querySelector('[data-action="zoom-in"]').addEventListener('click', () => zoomBy(0.25));
+document.querySelector('[data-action="zoom-out"]').addEventListener('click', () => zoomBy(-0.25));
+document.querySelector('[data-action="reset"]').addEventListener('click', () => { scale = 1; centerGrid(); });
+document.querySelector('[data-action="close"]').addEventListener('click', () => window.close());
+viewport.addEventListener('wheel', event => { event.preventDefault(); zoomBy(event.deltaY < 0 ? 0.15 : -0.15, event.clientX, event.clientY); }, {passive:false});
+viewport.addEventListener('pointerdown', event => { isDragging = true; viewport.classList.add('dragging'); startX = event.clientX - originX; startY = event.clientY - originY; viewport.setPointerCapture(event.pointerId); });
+viewport.addEventListener('pointermove', event => { if (!isDragging) return; originX = event.clientX - startX; originY = event.clientY - startY; render(); });
+viewport.addEventListener('pointerup', event => { isDragging = false; viewport.classList.remove('dragging'); viewport.releasePointerCapture(event.pointerId); });
+window.addEventListener('resize', centerGrid);
+requestAnimationFrame(centerGrid);
+</scr` + `ipt>
+</body>
+</html>`);
+    fullscreenWindow.document.close();
+  };
+
+  const downloadPatternPdf = () => {
+    const pdfWindow = window.open('', '_blank');
+    if (!pdfWindow) {
+      notify('Please allow pop-ups to generate the PDF.', 'error');
+      return;
+    }
+    pdfWindow.opener = null;
+    pdfWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>${escapeHtml(pattern.title)} bead grid</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box}body{font-family:'Space Grotesk',sans-serif;color:#1A1A18;margin:28px;background:#fff}header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px;border-bottom:2px solid #E8E6E1;padding-bottom:14px}h1{font-size:26px;line-height:1.1;margin:0 0 6px;font-weight:800}.meta{font:700 12px 'Space Mono',monospace;color:#777}.grid-wrap{overflow:visible;margin:18px 0}.grid{display:inline-block;border:1px solid #777;break-inside:avoid}.grid-row{display:flex}.grid-cell{width:10px;height:10px;flex:0 0 auto;border:.4px solid rgba(0,0,0,.16);font:700 5px 'Space Mono',monospace;color:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;overflow:hidden}.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 14px;margin-top:18px}.legend-item{display:flex;align-items:center;gap:8px;break-inside:avoid}.swatch{width:18px;height:18px;border:1px solid rgba(0,0,0,.18);border-radius:4px;flex:0 0 auto}.legend-item strong{display:block;font-size:12px;line-height:1.1}.legend-item small{display:block;font:700 10px 'Space Mono',monospace;color:#777;margin-top:2px}@page{size:auto;margin:12mm}@media print{body{margin:0}.no-print{display:none}.grid-cell{print-color-adjust:exact;-webkit-print-color-adjust:exact}.swatch{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>${escapeHtml(pattern.title)}</h1><div class="meta">${pattern.gridW}x${pattern.gridH} beads · ${totalBeads} total beads · ${Object.keys(usedColors).length} colors</div></div>
+  <button class="no-print" onclick="window.print()" style="border:0;border-radius:8px;background:#F47A8A;color:#fff;padding:10px 14px;font-weight:800;font-family:'Space Grotesk',sans-serif;cursor:pointer">Print / Save PDF</button>
+</header>
+<main>
+  <div class="grid-wrap"><div class="grid">${buildGridRowsHtml(10, pattern.gridW <= 80 && pattern.gridH <= 80)}</div></div>
+  <section class="legend">${buildLegendHtml()}</section>
+</main>
+</body>
+</html>`);
+    pdfWindow.document.close();
+    setTimeout(() => {
+      pdfWindow.focus();
+      pdfWindow.print();
+    }, 250);
+  };
 
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(26,26,24,0.7)',backdropFilter:'blur(6px)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
-      <div className="scale-in" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:20,width:'min(920px,95vw)',maxHeight:'90vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 80px rgba(0,0,0,0.25)'}}>
+    <div className="viewer-overlay" onClick={onClose}>
+      <div className="viewer-modal scale-in" role="dialog" aria-modal="true" aria-labelledby="viewer-title" onClick={e=>e.stopPropagation()}>
         {/* Header */}
-        <div style={{padding:'18px 24px',borderBottom:'1px solid #f0ede8',display:'flex',alignItems:'center',gap:16}}>
+        <div className="viewer-header">
           <div style={{flex:1}}>
-            <h2 style={{fontSize:20,fontWeight:800,letterSpacing:'-0.02em'}}>{pattern.title}</h2>
+            <h2 id="viewer-title" style={{fontSize:20,fontWeight:800,letterSpacing:'-0.02em'}}>{pattern.title}</h2>
             <div style={{fontSize:12,color:'#999',marginTop:2,fontFamily:'Space Mono,monospace'}}>
               {pattern.gridW}×{pattern.gridH} beads · {Object.keys(usedColors).length} colors
               {isLoggedIn && ` · ${doneBeads}/${totalBeads} placed`}
@@ -396,14 +1556,14 @@ function BeadMapViewer({ pattern, onClose, user }) {
               <button key={z} onClick={()=>setZoom(z)} style={{background:zoom===z?T.accentRed:'#f2f1ee',color:zoom===z?'#fff':'#555',border:'none',borderRadius:6,padding:'5px 9px',fontSize:11,cursor:'pointer',fontFamily:'Space Mono,monospace',fontWeight:700}}>{z}×</button>
             ))}
           </div>
-          <button onClick={onClose} style={{background:'#f2f1ee',border:'none',borderRadius:8,width:34,height:34,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#555'}}>
+          <button onClick={onClose} aria-label="Close pattern viewer" style={{background:'#f2f1ee',border:'none',borderRadius:8,width:34,height:34,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#555'}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
 
         {/* Body */}
-        <div style={{display:'flex',flex:1,overflow:'hidden',minHeight:0}}>
-          <div style={{flex:1,overflow:'auto',padding:24}}>
+        <div className="viewer-body">
+          <div className="viewer-grid-area">
             {!isLoggedIn && (
               <div style={{background:`${T.accentOrange}15`,border:`1px solid ${T.accentOrange}40`,borderRadius:10,padding:'10px 16px',marginBottom:16,fontSize:13,color:'#8B6914',display:'flex',alignItems:'center',gap:8}}>
                 <span>🔒</span>
@@ -446,7 +1606,7 @@ function BeadMapViewer({ pattern, onClose, user }) {
           </div>
 
           {/* Legend */}
-          <div style={{width:200,borderLeft:'1px solid #f0ede8',padding:'20px 16px',overflow:'auto',flexShrink:0}}>
+          <div className="viewer-legend">
             <div style={{fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',color:'#aaa',fontWeight:700,marginBottom:12}}>Color Legend</div>
             {Object.entries(usedColors).map(([id, count]) => {
               const bead = palette.find(b=>b.id===id) || {id,name:id,hex:'#e0e0e0'};
@@ -470,12 +1630,25 @@ function BeadMapViewer({ pattern, onClose, user }) {
                 </div>
               );
             })}
-            <button style={{width:'100%',marginTop:16,background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
-              ↓ Download PDF
-            </button>
-            {isLoggedIn && crossed.size > 0 && (
-              <button onClick={()=>setCrossed(new Set())} style={{width:'100%',marginTop:8,background:'transparent',color:'#bbb',border:'1px solid #e8e6e1',borderRadius:8,padding:'8px 0',fontWeight:600,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Reset Progress</button>
-            )}
+            <div className="viewer-actions">
+              <button onClick={openGridFullscreenTab} style={{width:'100%',background:'#fff',color:T.accentRed,border:`1px solid ${T.accentRed}`,borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9V3h6"/>
+                  <path d="M21 9V3h-6"/>
+                  <path d="M3 15v6h6"/>
+                  <path d="M21 15v6h-6"/>
+                </svg>
+                Fullscreen
+              </button>
+              {isAdmin && (
+                <button onClick={downloadPatternPdf} style={{width:'100%',background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+                  ↓ Download PDF
+                </button>
+              )}
+              {isLoggedIn && crossed.size > 0 && (
+                <button onClick={resetProgress} style={{width:'100%',background:'transparent',color:'#8A6D72',border:'1px solid #e8e6e1',borderRadius:8,padding:'8px 0',fontWeight:600,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Reset Progress</button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -489,7 +1662,7 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
   const faved = patterns.filter(p => favIds.has(p.id));
 
   if (!isLoggedIn) return (
-    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+    <div className="page-shell pixel-bg" style={{minHeight:'calc(100vh - 60px)',display:'flex',alignItems:'center',justifyContent:'center'}}>
       <div style={{textAlign:'center',maxWidth:360,padding:40}}>
         <div style={{width:80,height:80,borderRadius:20,background:`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 24px',fontSize:36}}>♥</div>
         <h2 style={{fontSize:24,fontWeight:800,marginBottom:8}}>Your Favorites</h2>
@@ -500,8 +1673,9 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
   );
 
   return (
-    <div className="pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
-      <div style={{marginBottom:32}}>
+    <div className="page-shell pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div className="page-inner">
+      <div className="page-header" style={{marginBottom:32}}>
         <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>My <span style={{color:T.accentRed}}>Favorites</span></h1>
         <p style={{color:'#888',fontSize:15}}>{faved.length} saved pattern{faved.length !== 1 ? 's' : ''}</p>
       </div>
@@ -512,7 +1686,7 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
           <div style={{fontSize:13,marginTop:4}}>Heart a pattern in the gallery to save it here</div>
         </div>
       ) : (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
+        <div className="pattern-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:20}}>
           {faved.map(p => (
             <div key={p.id} className="fade-in">
               <PatternCard pattern={p} onOpen={onOpen} isFaved={true} onFave={onFave} isLoggedIn={true}/>
@@ -520,6 +1694,465 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
           ))}
         </div>
       )}
+      </div>
+    </div>
+  );
+}
+
+// ─── TIME TABLE PAGE ─────────────────────────────────────────────────────────
+function TimeTablePage({ user }) {
+  const isAdmin = !!user?.is_admin;
+  const [tables, setTables] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastLoadedAt, setLastLoadedAt] = useState(Date.now());
+  const [tick, setTick] = useState(Date.now());
+  const [selectedTable, setSelectedTable] = useState(() => {
+    const number = Number(new URLSearchParams(window.location.search).get('table'));
+    return Number.isInteger(number) && number >= 1 && number <= 14 ? number : null;
+  });
+  const [setValues, setSetValues] = useState({});
+  const [savingTable, setSavingTable] = useState(null);
+  const [message, setMessage] = useState('');
+  const [reportDate, setReportDate] = useState(formatDateInput());
+  const [report, setReport] = useState({ summary:{sessions:0, occupied_seconds:0, charged_seconds:0}, daily_report:[], logs:[] });
+  const [reportLoading, setReportLoading] = useState(false);
+
+  const buildTableLink = (tableNumber) => `${window.location.origin}${window.location.pathname}?page=timetable&table=${tableNumber}`;
+
+  const loadTables = useCallback(async () => {
+    try {
+      const res = await apiFetch('/timetable');
+      const data = res?.ok ? await res.json() : null;
+      if (Array.isArray(data)) {
+        setTables(data);
+        setLastLoadedAt(Date.now());
+        setSetValues(prev => {
+          const next = { ...prev };
+          data.forEach(table => {
+            if (next[table.table_number] == null) next[table.table_number] = formatDuration(table.elapsed_seconds);
+          });
+          return next;
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadReport = useCallback(async () => {
+    if (!isAdmin) {
+      setReport({ summary:{sessions:0, occupied_seconds:0, charged_seconds:0}, daily_report:[], logs:[] });
+      return;
+    }
+    setReportLoading(true);
+    try {
+      const res = await apiFetch(`/timetable/report?date=${reportDate}`);
+      const data = res?.ok ? await res.json() : null;
+      if (data) setReport(data);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [isAdmin, reportDate]);
+
+  useEffect(() => {
+    loadTables();
+    const refresh = setInterval(loadTables, 5000);
+    return () => clearInterval(refresh);
+  }, [loadTables]);
+
+  useEffect(() => {
+    loadReport();
+  }, [loadReport]);
+
+  useEffect(() => {
+    const clock = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(clock);
+  }, []);
+
+  const liveElapsed = (table) => {
+    const base = Number(table.elapsed_seconds) || 0;
+    if (!table.is_running) return base;
+    return base + Math.max(0, Math.floor((tick - lastLoadedAt) / 1000));
+  };
+
+  const runTableAction = async (tableNumber, action) => {
+    if (action === 'reset' && !window.confirm(`Reset Table #${tableNumber} timer? This will clear the current time.`)) {
+      return;
+    }
+    setSavingTable(tableNumber);
+    setMessage('');
+    try {
+      const res = await apiFetch(`/timetable/${tableNumber}/${action}`, { method: 'POST' });
+      if (!res?.ok) {
+        setMessage('Unable to update table status.');
+        return;
+      }
+      await loadTables();
+      if (action !== 'start') await loadReport();
+    } finally {
+      setSavingTable(null);
+    }
+  };
+
+  async function resetAllTables() {
+    if (!window.confirm('Reset all table timers? This will clear every table timer.')) {
+      return;
+    }
+    setSavingTable('all');
+    setMessage('');
+    try {
+      const res = await apiFetch('/timetable/reset-all', { method: 'POST' });
+      if (!res?.ok) {
+        setMessage('Unable to reset all table timers.');
+        return;
+      }
+      await loadTables();
+      await loadReport();
+      setMessage('All table timers reset.');
+    } finally {
+      setSavingTable(null);
+    }
+  }
+
+  const setTableTime = async (table) => {
+    const tableNumber = table.table_number;
+    setSavingTable(tableNumber);
+    setMessage('');
+    try {
+      const elapsedSeconds = parseDurationInput(setValues[tableNumber] || formatDuration(liveElapsed(table)));
+      const res = await apiFetch(`/timetable/${tableNumber}`, {
+        method: 'PUT',
+        body: JSON.stringify({ elapsed_seconds: elapsedSeconds, is_running: table.is_running }),
+      });
+      if (!res?.ok) {
+        setMessage('Use seconds or HH:MM:SS for table time.');
+        return;
+      }
+      await loadTables();
+    } finally {
+      setSavingTable(null);
+    }
+  };
+
+  const openTableLink = (tableNumber) => {
+    setSelectedTable(tableNumber);
+    window.history.replaceState(null, '', `?page=timetable&table=${tableNumber}`);
+  };
+
+  const clearIndividualTable = () => {
+    setSelectedTable(null);
+    window.history.replaceState(null, '', '?page=timetable');
+  };
+
+  const copyTableLink = async (tableNumber) => {
+    const link = buildTableLink(tableNumber);
+    openTableLink(tableNumber);
+    try {
+      await navigator.clipboard.writeText(link);
+      setMessage(`Table ${tableNumber} link copied.`);
+    } catch (err) {
+      setMessage(link);
+    }
+  };
+
+  const tableSlots = tables.length
+    ? tables
+    : Array.from({length: 14}, (_, index) => ({
+      table_number: index + 1,
+      status: 'Free',
+      is_running: false,
+      elapsed_seconds: 0,
+    }));
+
+  const isIndividualTablePage = selectedTable != null;
+  const visibleTableSlots = isIndividualTablePage
+    ? tableSlots.filter(table => table.table_number === selectedTable)
+    : tableSlots;
+  const occupiedCount = tableSlots.filter(table => table.is_running).length;
+  const reportSummary = report?.summary || { sessions:0, occupied_seconds:0, charged_seconds:0 };
+  const dailyRows = report?.daily_report || [];
+  const timeLogs = report?.logs || [];
+
+  return (
+    <div className="page-shell pixel-bg" style={{minHeight:'calc(100vh - 60px)',padding:'40px 40px'}}>
+      <div className="page-inner">
+      <div className="page-header" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:24,marginBottom:28,flexWrap:'wrap'}}>
+        <div>
+          <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>
+            {isIndividualTablePage ? <>Table <span style={{color:T.accentRed}}>#{selectedTable}</span></> : <>Time <span style={{color:T.accentRed}}>Table</span></>}
+          </h1>
+          <p style={{color:'#888',fontSize:15}}>
+            {isIndividualTablePage ? `Only Table ${selectedTable} stopwatch is shown on this individual page.` : 'Check which bead tables are free and follow each table stopwatch.'}
+          </p>
+        </div>
+        <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+          {!isIndividualTablePage && (
+            <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px'}}>
+              <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:700}}>Occupied</div>
+              <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:20,color:T.accentRed}}>{occupiedCount}/14</div>
+            </div>
+          )}
+          {isIndividualTablePage && (
+            <button onClick={clearIndividualTable} style={{background:'#fff',color:'#555',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+              All Tables
+            </button>
+          )}
+          <button onClick={loadTables} style={{background:'#fff',color:'#555',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+          {isAdmin && (
+            <button onClick={resetAllTables} disabled={savingTable === 'all'} style={{background:savingTable === 'all'?'#e8e6e1':T.accentRed,color:savingTable === 'all'?'#aaa':'#fff',border:'none',borderRadius:8,padding:'10px 14px',fontWeight:800,fontSize:13,cursor:savingTable === 'all'?'default':'pointer',fontFamily:'inherit'}}>
+              {savingTable === 'all' ? 'Resetting...' : 'Reset All Timers'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {message && (
+        <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',marginBottom:18,color:'#666',fontSize:13,fontWeight:600,overflowWrap:'anywhere'}}>
+          {message}
+        </div>
+      )}
+
+      <div style={{display:'grid',gridTemplateColumns:isIndividualTablePage?'minmax(260px, 420px)':'repeat(auto-fill, minmax(260px, 1fr))',gap:18}}>
+        {visibleTableSlots.map(table => {
+          const elapsed = liveElapsed(table);
+          const active = selectedTable === table.table_number;
+          const saving = savingTable === table.table_number;
+          return (
+            <article key={table.table_number} className="fade-in" style={{
+              background:'#fff',
+              border:`2px solid ${active ? T.accentRed : '#E8E6E1'}`,
+              borderRadius:8,
+              padding:20,
+              boxShadow:active?'0 12px 30px rgba(244,122,138,0.16)':'0 4px 18px rgba(26,26,24,0.05)'
+            }}>
+              <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'flex-start',marginBottom:18}}>
+                <div>
+                  <div style={{fontSize:11,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:700,marginBottom:5}}>Table</div>
+                  <h2 style={{fontSize:28,fontWeight:800,lineHeight:1}}>#{table.table_number}</h2>
+                </div>
+                <span style={{
+                  background:table.is_running?`${T.accentRed}18`:'#ECFDF5',
+                  color:table.is_running?T.accentRed:'#047857',
+                  border:`1px solid ${table.is_running?`${T.accentRed}45`:'#A7F3D0'}`,
+                  borderRadius:20,
+                  padding:'5px 10px',
+                  fontSize:11,
+                  fontWeight:800,
+                  letterSpacing:'.04em',
+                  textTransform:'uppercase'
+                }}>{table.status}</span>
+              </div>
+
+              <div style={{marginBottom:18}}>
+                <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:34,letterSpacing:'0',color:'#1A1A18'}}>
+                  {formatDuration(elapsed)}
+                </div>
+                <div style={{display:'flex',gap:10,flexWrap:'wrap',marginTop:8}}>
+                  <span style={{fontSize:12,color:'#777',fontWeight:700}}>Occupied {formatDuration(elapsed)}</span>
+                  <span style={{fontSize:12,color:T.accentRed,fontWeight:800}}>Charging {formatDuration(calculateChargedSeconds(elapsed))}</span>
+                </div>
+                {table.active_member && (
+                  <div style={{marginTop:12,background:`${T.accentOrange}10`,border:`1px solid ${T.accentOrange}35`,borderRadius:8,padding:'10px 12px'}}>
+                    <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#7A94A8',fontWeight:800,marginBottom:4}}>Checked-in member</div>
+                    <div style={{fontWeight:800,color:'#1A1A18'}}>{table.active_member.name}</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:'#666',marginTop:2}}>{table.active_member.member_code} · {formatHours(table.active_member.remaining_seconds)} left</div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{display:'flex',gap:8,marginBottom:isAdmin?16:0}}>
+                <a href={buildTableLink(table.table_number)} onClick={e => { e.preventDefault(); openTableLink(table.table_number); }} style={{
+                  flex:1,
+                  textAlign:'center',
+                  textDecoration:'none',
+                  background:'#f8f7f4',
+                  color:'#555',
+                  border:'1px solid #E8E6E1',
+                  borderRadius:8,
+                  padding:'9px 10px',
+                  fontWeight:700,
+                  fontSize:13
+                }}>Open Link</a>
+                <button onClick={() => copyTableLink(table.table_number)} style={{
+                  flex:1,
+                  background:'#fff',
+                  color:T.accentRed,
+                  border:`1px solid ${T.accentRed}`,
+                  borderRadius:8,
+                  padding:'9px 10px',
+                  fontWeight:700,
+                  fontSize:13,
+                  cursor:'pointer',
+                  fontFamily:'inherit'
+                }}>Copy Link</button>
+              </div>
+
+              {isAdmin && (
+                <div style={{borderTop:'1px solid #F0EDEA',paddingTop:16}}>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
+                    <button onClick={() => runTableAction(table.table_number, 'start')} disabled={saving || table.is_running} style={{
+                      background:table.is_running?'#e8e6e1':T.accentRed,
+                      color:table.is_running?'#aaa':'#fff',
+                      border:'none',
+                      borderRadius:8,
+                      padding:'9px 0',
+                      fontWeight:800,
+                      fontSize:12,
+                      cursor:(saving || table.is_running)?'default':'pointer',
+                      fontFamily:'inherit'
+                    }}>Start</button>
+                    <button onClick={() => runTableAction(table.table_number, 'stop')} disabled={saving || !table.is_running} style={{
+                      background:!table.is_running?'#e8e6e1':T.accentOrange,
+                      color:!table.is_running?'#aaa':'#fff',
+                      border:'none',
+                      borderRadius:8,
+                      padding:'9px 0',
+                      fontWeight:800,
+                      fontSize:12,
+                      cursor:(saving || !table.is_running)?'default':'pointer',
+                      fontFamily:'inherit'
+                    }}>Stop</button>
+                    <button onClick={() => runTableAction(table.table_number, 'reset')} disabled={saving} style={{
+                      background:'#f2f1ee',
+                      color:'#555',
+                      border:'none',
+                      borderRadius:8,
+                      padding:'9px 0',
+                      fontWeight:800,
+                      fontSize:12,
+                      cursor:saving?'default':'pointer',
+                      fontFamily:'inherit'
+                    }}>Reset</button>
+                  </div>
+                  <div style={{display:'flex',gap:8}}>
+                    <input value={setValues[table.table_number] || ''} onChange={e=>setSetValues(prev => ({...prev, [table.table_number]: e.target.value}))} placeholder="HH:MM:SS" style={{
+                      minWidth:0,
+                      flex:1,
+                      border:'1px solid #E8E6E1',
+                      borderRadius:8,
+                      padding:'9px 10px',
+                      fontFamily:'Space Mono,monospace',
+                      fontSize:12,
+                      outline:'none'
+                    }}/>
+                    <button onClick={() => setTableTime(table)} disabled={saving} style={{
+                      background:'#1A1A18',
+                      color:'#fff',
+                      border:'none',
+                      borderRadius:8,
+                      padding:'9px 12px',
+                      fontWeight:800,
+                      fontSize:12,
+                      cursor:saving?'default':'pointer',
+                      fontFamily:'inherit'
+                    }}>{saving ? 'Saving' : 'Set'}</button>
+                  </div>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+
+      {isAdmin && (
+      <section style={{marginTop:28,display:'grid',gap:18}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:14,flexWrap:'wrap'}}>
+          <div>
+            <h2 style={{fontSize:24,fontWeight:800,marginBottom:4}}>Daily Report</h2>
+            <p style={{fontSize:13,color:'#888'}}>Saved database logs for completed table sessions.</p>
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <input type="date" value={reportDate} onChange={e=>setReportDate(e.target.value || formatDateInput())} style={{
+              border:'1px solid #E8E6E1',
+              borderRadius:8,
+              padding:'9px 10px',
+              fontFamily:'Space Mono,monospace',
+              fontSize:12,
+              outline:'none'
+            }}/>
+            <button onClick={loadReport} style={{
+              background:'#fff',
+              color:'#555',
+              border:'1px solid #E8E6E1',
+              borderRadius:8,
+              padding:'9px 12px',
+              fontWeight:800,
+              fontSize:12,
+              cursor:'pointer',
+              fontFamily:'inherit'
+            }}>{reportLoading ? 'Loading' : 'Refresh'}</button>
+          </div>
+        </div>
+
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',gap:12}}>
+          {[
+            ['Sessions', reportSummary.sessions || 0],
+            ['Occupied Time', formatDuration(reportSummary.occupied_seconds)],
+            ['Charging Time', formatDuration(reportSummary.charged_seconds)],
+          ].map(([label, value]) => (
+            <div key={label} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'14px 16px'}}>
+              <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:800,marginBottom:6}}>{label}</div>
+              <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:20,color:label === 'Charging Time' ? T.accentRed : '#1A1A18'}}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))',gap:18}}>
+          <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:18}}>
+            <div style={{fontSize:14,fontWeight:800,marginBottom:12}}>Daily Report</div>
+            <div style={{display:'grid',gap:8}}>
+              {dailyRows.length === 0 && (
+                <div style={{fontSize:13,color:'#999',padding:'12px 0'}}>No completed table sessions for this date.</div>
+              )}
+              {dailyRows.map(row => (
+                <div key={row.table_number} style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(92px, 1fr))',gap:10,alignItems:'center',borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                  <div style={{fontWeight:800}}>Table #{row.table_number}</div>
+                  <div>
+                    <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:800}}>Occupied</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:13,fontWeight:700}}>{formatDuration(row.occupied_seconds)}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:800}}>Charging</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:13,fontWeight:700,color:T.accentRed}}>{formatDuration(row.charged_seconds)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:18,overflow:'hidden'}}>
+            <div style={{fontSize:14,fontWeight:800,marginBottom:12}}>Time Log</div>
+            <div style={{display:'grid',gap:8,maxHeight:360,overflow:'auto',paddingRight:4}}>
+              {timeLogs.length === 0 && (
+                <div style={{fontSize:13,color:'#999',padding:'12px 0'}}>No saved logs for this date.</div>
+              )}
+              {timeLogs.map(log => (
+                <div key={log.id} style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(92px, 1fr))',gap:10,alignItems:'center',borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                  <div style={{fontWeight:800}}>#{log.table_number}</div>
+                  <div>
+                    {log.member && <div style={{fontSize:12,color:T.accentRed,fontWeight:800}}>{log.member.name}</div>}
+                    <div style={{fontSize:12,color:'#555',fontWeight:700}}>{formatDateTime(log.started_at)}</div>
+                    <div style={{fontSize:12,color:'#999'}}>to {formatDateTime(log.ended_at)}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:800}}>Occupied</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:12,fontWeight:700}}>{formatDuration(log.occupied_seconds)}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:'#aaa',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:800}}>Charging</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:12,fontWeight:700,color:T.accentRed}}>{formatDuration(log.charged_seconds)}</div>
+                    {log.extra_due_seconds > 0 && <div style={{fontSize:11,color:'#B45309',fontWeight:800}}>Due {formatDuration(log.extra_due_seconds)}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+      </div>
     </div>
   );
 }
@@ -527,6 +2160,7 @@ function FavoritesPage({ patterns, favIds, onFave, onOpen, user, onLoginClick })
 // ─── ADMIN PAGE ───────────────────────────────────────────────────────────────
 function AdminPage({ onPatternPublished }) {
   const [step, setStep] = useState('upload');
+  const [adminImportMode, setAdminImportMode] = useState(PHOTO_IMPORT_MODE);
   const [dragging, setDragging] = useState(false);
   const [uploaded, setUploaded] = useState(null);
   const [settings, setSettings] = useState({ gridSize: '24x24', quality: 85 });
@@ -566,15 +2200,27 @@ function AdminPage({ onPatternPublished }) {
     return new File([bytes], filename, { type: mime });
   };
 
+  const isCsvFile = (file) => {
+    const name = (file?.name || '').toLowerCase();
+    const type = (file?.type || '').toLowerCase();
+    return name.endsWith('.csv') || ['text/csv', 'application/csv', 'application/vnd.ms-excel', 'text/plain'].includes(type);
+  };
+
   const handleFileSelect = async (file) => {
     if (!file) return;
-    if (!file.type?.startsWith('image/')) {
-      setError('Please choose a JPG, PNG, or WEBP image');
+    const csvFile = isCsvFile(file);
+    if (!csvFile && !file.type?.startsWith('image/')) {
+      setError('Please choose a JPG, PNG, WEBP image or CSV bead pattern');
       resetFileInput();
       return;
     }
-    if (file.size > 20 * 1024 * 1024) {
+    if (!csvFile && file.size > 20 * 1024 * 1024) {
       setError('Image must be 20 MB or smaller');
+      resetFileInput();
+      return;
+    }
+    if (csvFile && file.size > 5 * 1024 * 1024) {
+      setError('CSV must be 5 MB or smaller');
       resetFileInput();
       return;
     }
@@ -582,15 +2228,23 @@ function AdminPage({ onPatternPublished }) {
     localStorage.removeItem('pixelcraft_editor_payload');
     localStorage.removeItem('pixelcraft_editor_result');
     try {
-      const sourceImageDataUrl = await fileToDataUrl(file);
-      setUploaded({ name: file.name, size: `${(file.size / 1024 / 1024).toFixed(1)} MB`, file, sourceImageDataUrl });
+      const sourceImageDataUrl = csvFile ? null : await fileToDataUrl(file);
+      setUploaded({
+        name: file.name,
+        size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+        file,
+        sourceImageDataUrl,
+        kind: csvFile ? 'csv' : 'image',
+      });
+      setIsGridImage(false);
+      if (csvFile) setAdminImportMode(PHOTO_IMPORT_MODE);
       setStep('configure');
       setAiEnhancingSize(null);
       aiEnhancingRef.current.clear();
       setEditorStatus('');
       setError('');
     } catch (err) {
-      setError('Unable to read image');
+      setError(csvFile ? 'Unable to read CSV' : 'Unable to read image');
     } finally {
       resetFileInput();
     }
@@ -605,6 +2259,7 @@ function AdminPage({ onPatternPublished }) {
 
   const handleProcess = async () => {
     if (!uploaded?.file) return;
+    const importingCsv = uploaded.kind === 'csv';
     setProcessing(true);
     setError('');
     setEditorStatus('');
@@ -613,7 +2268,8 @@ function AdminPage({ onPatternPublished }) {
     form.append('grid_size', settings.gridSize);
     form.append('palette_name', 'MARD');
     form.append('quality', settings.quality);
-    form.append('is_grid_image', String(isGridImage));
+    form.append('is_grid_image', String(adminImportMode === READY_GRID_IMPORT_MODE ? false : isGridImage));
+    form.append('import_mode', adminImportMode);
     try {
       const res = await apiFetch('/admin/upload', { method: 'POST', body: form });
       if (!res?.ok) {
@@ -630,6 +2286,9 @@ function AdminPage({ onPatternPublished }) {
         setSelectedSize(keys.includes('24x24') ? '24x24' : keys[Math.floor(keys.length / 2)]);
       } else {
         setSelectedSize(null);
+      }
+      if ((importingCsv || adminImportMode === READY_GRID_IMPORT_MODE) && !publishTitle.trim()) {
+        setPublishTitle(uploaded.name.replace(/\.(csv|png|jpe?g|webp)$/i, ''));
       }
       setStep('preview');
     } catch (err) {
@@ -724,6 +2383,7 @@ function AdminPage({ onPatternPublished }) {
       setPublishTags(draft.publishTags || '');
       setPublishSize(draft.publishSize || 'Medium');
       setIsGridImage(Boolean(draft.isGridImage));
+      setAdminImportMode(draft.adminImportMode || PHOTO_IMPORT_MODE);
       setStep('preview');
       setAiEnhancingSize(null);
       aiEnhancingRef.current.clear();
@@ -781,6 +2441,7 @@ function AdminPage({ onPatternPublished }) {
       publishTags,
       publishSize,
       isGridImage,
+      adminImportMode,
     }));
     localStorage.setItem('pixelcraft_editor_payload', JSON.stringify(payload));
     localStorage.removeItem('pixelcraft_editor_result');
@@ -950,6 +2611,7 @@ function AdminPage({ onPatternPublished }) {
       setEditorStatus('');
       setPublishTitle('');
       setPublishTags('');
+      setAdminImportMode(PHOTO_IMPORT_MODE);
       localStorage.removeItem('pixelcraft_admin_draft');
       localStorage.removeItem('pixelcraft_editor_payload');
       apiFetch('/admin/stats').then(r => r?.json()).then(d => { if (d) setStats(d); });
@@ -971,6 +2633,27 @@ function AdminPage({ onPatternPublished }) {
       <div style={{marginBottom:32}}>
         <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'-0.03em',marginBottom:8}}>Admin <span style={{color:T.accentRed}}>Dashboard</span></h1>
         <p style={{color:'#888',fontSize:15}}>Upload images and configure bead pattern conversion</p>
+      </div>
+
+      <div style={{display:'inline-flex',background:'#fff',border:'1px solid #f0ede8',borderRadius:12,padding:4,marginBottom:24,boxShadow:'0 8px 24px rgba(26,26,24,0.04)'}}>
+        {[
+          [PHOTO_IMPORT_MODE, 'Photo / CSV'],
+          [READY_GRID_IMPORT_MODE, 'Ready Grid Image'],
+        ].map(([mode,label]) => {
+          const active = adminImportMode === mode;
+          return (
+            <button key={mode} onClick={() => {
+              setAdminImportMode(mode);
+              setIsGridImage(false);
+              setError('');
+            }} style={{
+              background:active?`linear-gradient(135deg, ${T.accentRed}, ${T.accentOrange})`:'transparent',
+              color:active?'#fff':'#666',
+              border:'none',borderRadius:8,padding:'10px 16px',fontWeight:800,fontSize:13,
+              cursor:'pointer',fontFamily:'inherit',transition:'all 0.2s'
+            }}>{label}</button>
+          );
+        })}
       </div>
 
       {/* Steps indicator */}
@@ -1000,7 +2683,7 @@ function AdminPage({ onPatternPublished }) {
         </div>
       )}
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 380px',gap:24,maxWidth:960}}>
+      <div className="admin-layout" style={{display:'grid',gridTemplateColumns:'1fr 380px',gap:24,maxWidth:960}}>
         <div>
           {/* Step 1: Upload */}
           {step === 'upload' && (
@@ -1008,7 +2691,7 @@ function AdminPage({ onPatternPublished }) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/webp"
+                accept="image/png,image/jpeg,image/webp,.csv,text/csv"
                 style={{display:'none'}}
                 onChange={e => {
                   handleFileSelect(e.target.files?.[0]);
@@ -1016,18 +2699,34 @@ function AdminPage({ onPatternPublished }) {
                 }}
               />
               <div
+                role="button"
+                tabIndex={0}
+                aria-label="Choose image or CSV file"
                 onDragOver={e=>{e.preventDefault();setDragging(true)}}
                 onDragLeave={()=>setDragging(false)}
                 onDrop={handleDrop}
                 onClick={() => { resetFileInput(); fileInputRef.current?.click(); }}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    resetFileInput();
+                    fileInputRef.current?.click();
+                  }
+                }}
                 style={{border:`2px dashed ${dragging?T.accentRed:'#d0cec9'}`,borderRadius:16,padding:'60px 40px',textAlign:'center',background:dragging?`${T.accentRed}08`:'#fff',transition:'all 0.2s',cursor:'pointer'}}>
                 <div style={{width:72,height:72,borderRadius:16,background:`${T.accentRed}12`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px'}}>
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={T.accentRed} strokeWidth="1.5">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                   </svg>
                 </div>
-                <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>Drop image here</div>
-                <div style={{color:'#999',fontSize:13,marginBottom:20}}>or click to browse · JPG, PNG, WEBP up to 20 MB</div>
+                <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>
+                  {adminImportMode === READY_GRID_IMPORT_MODE ? 'Drop ready grid image here' : 'Drop image here'}
+                </div>
+                <div style={{color:'#999',fontSize:13,marginBottom:20}}>
+                  {adminImportMode === READY_GRID_IMPORT_MODE
+                    ? 'or click to browse · numbered grid JPG, PNG, WEBP up to 20 MB'
+                    : 'or click to browse · JPG, PNG, WEBP up to 20 MB · CSV up to 5 MB'}
+                </div>
                 <span style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'10px 28px',fontWeight:700,fontSize:13,cursor:'pointer'}}>Choose File</span>
               </div>
             </div>
@@ -1044,26 +2743,60 @@ function AdminPage({ onPatternPublished }) {
                   <div style={{fontWeight:700,fontSize:14}}>{uploaded.name}</div>
                   <div style={{fontSize:12,color:'#999'}}>{uploaded.size}</div>
                 </div>
-                <button onClick={()=>{setUploaded(null);setAiEnhancingSize(null);resetFileInput();setStep('upload');}} style={{background:'none',border:'none',color:'#bbb',cursor:'pointer',fontSize:18}}>×</button>
+                <button onClick={()=>{setUploaded(null);setAiEnhancingSize(null);resetFileInput();setStep('upload');}} aria-label="Remove selected upload" style={{background:'none',border:'none',color:'#777',cursor:'pointer',fontSize:18}}>×</button>
               </div>
 
-              {/* Image type toggle */}
-              <div
-                onClick={()=>setIsGridImage(v=>!v)}
-                style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',
-                  background:isGridImage?`${T.accentRed}08`:'#f8f7f4',
-                  border:`2px solid ${isGridImage?T.accentRed:'#e8e6e1'}`,
-                  borderRadius:10,marginBottom:20,cursor:'pointer',transition:'all 0.2s'}}>
-                <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${isGridImage?T.accentRed:'#ccc'}`,
-                  background:isGridImage?T.accentRed:'#fff',display:'flex',alignItems:'center',justifyContent:'center',
-                  flexShrink:0,transition:'all 0.15s'}}>
-                  {isGridImage && <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              {uploaded.kind === 'csv' ? (
+                <div style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',
+                  background:`${T.accentRed}08`,border:`2px solid ${T.accentRed}`,
+                  borderRadius:10,marginBottom:20}}>
+                  <div style={{width:20,height:20,borderRadius:5,background:T.accentRed,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13,color:T.accentRed}}>Import CSV Pattern</div>
+                    <div style={{fontSize:12,color:'#999',marginTop:2}}>Reads bead-pattern CSV grids like bead-pattern-100x112-MARD_20260502-091813.csv</div>
+                  </div>
                 </div>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:700,fontSize:13,color:isGridImage?T.accentRed:'#444'}}>This image is already a bead grid</div>
-                  <div style={{fontSize:12,color:'#999',marginTop:2}}>Enable OCR extraction — reads an existing grid with color legend at the bottom</div>
+              ) : adminImportMode === READY_GRID_IMPORT_MODE ? (
+                <div style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',
+                  background:`${T.accentRed}08`,border:`2px solid ${T.accentRed}`,
+                  borderRadius:10,marginBottom:20}}>
+                  <div style={{width:20,height:20,borderRadius:5,background:T.accentRed,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13,color:T.accentRed}}>Ready Grid Image</div>
+                    <div style={{fontSize:12,color:'#999',marginTop:2}}>Reads color codes printed inside cells. Numbered row/column headers are ignored.</div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div
+                  role="checkbox"
+                  tabIndex={0}
+                  aria-checked={isGridImage ? 'true' : 'false'}
+                  onClick={()=>setIsGridImage(v=>!v)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setIsGridImage(value => !value);
+                    }
+                  }}
+                  style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',
+                    background:isGridImage?`${T.accentRed}08`:'#f8f7f4',
+                    border:`2px solid ${isGridImage?T.accentRed:'#e8e6e1'}`,
+                    borderRadius:10,marginBottom:20,cursor:'pointer',transition:'all 0.2s'}}>
+                  <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${isGridImage?T.accentRed:'#ccc'}`,
+                    background:isGridImage?T.accentRed:'#fff',display:'flex',alignItems:'center',justifyContent:'center',
+                    flexShrink:0,transition:'all 0.15s'}}>
+                    {isGridImage && <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13,color:isGridImage?T.accentRed:'#444'}}>This image is already a bead grid</div>
+                    <div style={{fontSize:12,color:'#999',marginTop:2}}>Enable OCR extraction — reads an existing grid with color legend at the bottom</div>
+                  </div>
+                </div>
+              )}
 
               <div style={{marginBottom:20}}>
                 <label style={{display:'block',fontSize:13,fontWeight:600,marginBottom:8,color:'#555'}}>色号系统</label>
@@ -1073,7 +2806,7 @@ function AdminPage({ onPatternPublished }) {
                 <div style={{fontSize:11,color:'#bbb',marginTop:6}}>Generated colors will be snapped to the MARD 221-color palette before preview and publish.</div>
               </div>
 
-              {!isGridImage && (
+              {!isGridImage && uploaded.kind !== 'csv' && adminImportMode !== READY_GRID_IMPORT_MODE && (
                 <div style={{marginBottom:24}}>
                   <div style={{display:'flex',justifyContent:'space-between',fontSize:13,fontWeight:600,marginBottom:8,color:'#555'}}>
                     <label>Color Accuracy</label>
@@ -1090,7 +2823,11 @@ function AdminPage({ onPatternPublished }) {
               }}>
                 {processing
                   ? <span style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10}}><Spinner size={14} color="#aaa"/>Processing…</span>
-                  : isGridImage ? 'Extract Bead Grid ✦' : 'Convert to Bead Map ✦'}
+                  : uploaded.kind === 'csv'
+                    ? 'Import CSV Pattern ✦'
+                    : adminImportMode === READY_GRID_IMPORT_MODE
+                      ? 'Import Ready Grid ✦'
+                      : isGridImage ? 'Extract Bead Grid ✦' : 'Convert to Bead Map ✦'}
               </button>
             </div>
           )}
@@ -1112,11 +2849,16 @@ function AdminPage({ onPatternPublished }) {
               {isMultiSize && (
                 <div style={{marginBottom:20}}>
                   <div style={{fontSize:11,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:600,marginBottom:10}}>Choose Grid Size</div>
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
+                  <div role="radiogroup" aria-label="Grid size" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
                     {Object.entries(processingResult.variants).map(([size, res]) => {
                       const sel = size === selectedSize;
                       return (
-                        <div key={size} onClick={()=>setSelectedSize(size)} style={{
+                        <div key={size} role="radio" tabIndex={0} aria-checked={sel ? 'true' : 'false'} onClick={()=>setSelectedSize(size)} onKeyDown={event => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedSize(size);
+                          }
+                        }} style={{
                           border:`2px solid ${sel?T.accentRed:'#e8e6e1'}`,borderRadius:10,padding:'8px 6px',
                           cursor:'pointer',textAlign:'center',
                           background:sel?`${T.accentRed}08`:'#f8f7f4',transition:'all 0.15s'
@@ -1199,8 +2941,8 @@ function AdminPage({ onPatternPublished }) {
                 </div>
               </div>
 
-              <div style={{display:'flex',gap:10}}>
-                <button onClick={()=>{setStep('upload');setUploaded(null);setProcessingResult(null);setAiEnhancingSize(null);resetFileInput();setEditorStatus('');localStorage.removeItem('pixelcraft_admin_draft');localStorage.removeItem('pixelcraft_editor_payload');localStorage.removeItem('pixelcraft_editor_result');}} style={{flex:1,background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Upload Another</button>
+              <div className="admin-action-row" style={{display:'flex',gap:10}}>
+                <button onClick={()=>{setStep('upload');setUploaded(null);setProcessingResult(null);setAiEnhancingSize(null);setAdminImportMode(PHOTO_IMPORT_MODE);resetFileInput();setEditorStatus('');localStorage.removeItem('pixelcraft_admin_draft');localStorage.removeItem('pixelcraft_editor_payload');localStorage.removeItem('pixelcraft_editor_result');}} style={{flex:1,background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'11px 0',fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Upload Another</button>
                 <button onClick={handleAiEnhancePreview} disabled={!activeResult || isActiveAiEnhancing || isGridImage || !selectedSize || !(uploaded?.file || uploaded?.sourceImageDataUrl)} style={{
                   flex:1,background:(!activeResult||isActiveAiEnhancing||isGridImage||!selectedSize||!(uploaded?.file||uploaded?.sourceImageDataUrl))?'#e8e6e1':'#fff',
                   color:(!activeResult||isActiveAiEnhancing||isGridImage||!selectedSize||!(uploaded?.file||uploaded?.sourceImageDataUrl))?'#aaa':T.accentRed,
@@ -1263,33 +3005,758 @@ function AdminPage({ onPatternPublished }) {
   );
 }
 
+// ─── MEMBERSHIP DASHBOARD ─────────────────────────────────────────────────────
+function MembershipPage({ user, onLogout }) {
+  const isAdmin = !!user?.is_admin;
+  const [membershipMode, setMembershipMode] = useState(isAdmin ? 'staff' : 'member');
+  const [query, setQuery] = useState('');
+  const [members, setMembers] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [tables, setTables] = useState([]);
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [scanMessage, setScanMessage] = useState('Camera scan is optional. Manual Member ID search always works.');
+  const [scanning, setScanning] = useState(false);
+  const [selectedQrUrl, setSelectedQrUrl] = useState('');
+  const [packageForm, setPackageForm] = useState({ package_name:'10-hour package', hours:'10' });
+  const [editForm, setEditForm] = useState({ email:'', name:'', phone:'', password:'', is_active:true, notes:'' });
+  const [promotionPhone, setPromotionPhone] = useState('');
+  const [checkInTable, setCheckInTable] = useState('1');
+  const [manualMemberCode, setManualMemberCode] = useState('');
+  const videoRef = useRef(null);
+  const scanCanvasRef = useRef(null);
+
+  useEffect(() => {
+    if (!isAdmin) setMembershipMode('member');
+  }, [isAdmin]);
+
+  const inputStyle = {
+    width:'100%',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 12px',
+    fontSize:13,fontFamily:'inherit',outline:'none',background:'#fff'
+  };
+
+  const loadTables = useCallback(async () => {
+    const res = await apiFetch('/timetable');
+    const data = res?.ok ? await res.json() : null;
+    if (Array.isArray(data)) setTables(data);
+  }, []);
+
+  const selectMember = useCallback(async (member) => {
+    const res = await apiFetch(`/members/${member.id}`);
+    if (res?.ok) {
+      setSelected(await res.json());
+    } else {
+      setSelected(member);
+    }
+  }, []);
+
+  const search = useCallback(async (term = '') => {
+    if (!isAdmin) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      const res = await apiFetch('/members/search?q=' + encodeURIComponent(term));
+      const data = res?.ok ? await res.json() : null;
+      if (Array.isArray(data)) {
+        setMembers(data);
+        if (data.length === 1) await selectMember(data[0]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [isAdmin, selectMember]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      search('');
+      loadTables();
+    }
+  }, [isAdmin, search, loadTables]);
+
+  useEffect(() => {
+    if (!selected?.id || !selected?.member_code) {
+      setSelectedQrUrl('');
+      return;
+    }
+    let cancelled = false;
+    apiFetch(`/members/${selected.id}/qr`).then(async res => {
+      if (!res?.ok || cancelled) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setSelectedQrUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [selected?.id]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setEditForm({
+      email:selected.email || '',
+      name:selected.name || '',
+      phone:selected.phone || '',
+      password:'',
+      is_active:selected.is_active !== false,
+      notes:selected.notes || '',
+    });
+    setPromotionPhone(selected.phone || '');
+  }, [selected?.id, selected?.email, selected?.name, selected?.phone, selected?.is_active, selected?.notes]);
+
+  const saveMember = async () => {
+    if (!selected) return;
+    if (!editForm.name.trim() || !editForm.phone.trim()) {
+      setMessage('Name and phone are required.');
+      return;
+    }
+    const res = await apiFetch(`/members/${selected.id}`, {
+      method:'PUT',
+      body:JSON.stringify({
+        email:editForm.email,
+        name:editForm.name,
+        phone:editForm.phone,
+        password:editForm.password,
+        is_active:editForm.is_active,
+        notes:editForm.notes,
+      }),
+    });
+    if (!res?.ok) {
+      let detail = 'Unable to update member.';
+      try { detail = (await res.json())?.detail || detail; } catch (_) {}
+      setMessage(detail);
+      return;
+    }
+    const updated = await res.json();
+    setMembers(prev => prev.map(member => member.id === updated.id ? {...member,...updated} : member));
+    await selectMember(updated);
+    setMessage('Member profile updated.');
+  };
+
+  const promoteMembership = async () => {
+    if (!selected || !promotionPhone.trim()) {
+      setMessage('A valid unique phone is required to promote this account.');
+      return;
+    }
+    const res = await apiFetch(`/members/${selected.id}/membership`, {
+      method:'POST',
+      body:JSON.stringify({ phone:promotionPhone }),
+    });
+    if (!res?.ok) {
+      let detail = 'Unable to promote this account.';
+      try { detail = (await res.json())?.detail || detail; } catch (_) {}
+      setMessage(detail);
+      return;
+    }
+    const promoted = await res.json();
+    setMembers(prev => prev.map(account => account.id === promoted.id ? {...account,...promoted} : account));
+    await selectMember(promoted);
+    setMessage('Membership capability added. Administrator access is unchanged.');
+  };
+
+  const removeMembership = async () => {
+    if (!selected?.member_code || !window.confirm('Remove membership capability from this account?')) return;
+    const res = await apiFetch(`/members/${selected.id}/membership`, { method:'DELETE' });
+    if (!res?.ok) {
+      let detail = 'Unable to remove membership capability.';
+      try { detail = (await res.json())?.detail || detail; } catch (_) {}
+      setMessage(detail);
+      return;
+    }
+    const updated = await res.json();
+    setMembers(prev => prev.map(account => account.id === updated.id ? {...account,...updated} : account));
+    setSelected(prev => ({...prev,...updated,packages:[],visits:[]}));
+    setMessage('Membership capability removed. The account and administrator access remain active.');
+  };
+
+  const addPackage = async () => {
+    if (!selected) return;
+    const hours = Number(packageForm.hours);
+    if (!Number.isFinite(hours) || hours <= 0) {
+      setMessage('Package hours must be greater than zero.');
+      return;
+    }
+    const res = await apiFetch(`/members/${selected.id}/packages`, {
+      method:'POST',
+      body: JSON.stringify({
+        package_name: packageForm.package_name || 'Membership package',
+        total_seconds: Math.round(hours * 3600),
+      }),
+    });
+    if (!res?.ok) {
+      setMessage('Unable to add package.');
+      return;
+    }
+    await selectMember(selected);
+    setMessage('Package added.');
+  };
+
+  const checkInMember = async () => {
+    const memberCode = (selected?.member_code || manualMemberCode).trim();
+    if (!memberCode) {
+      setMessage('Select a member or enter a Manual Member ID.');
+      return;
+    }
+    const tableNumber = Number(checkInTable);
+    const table = tables.find(row => row.table_number === tableNumber);
+    const path = table?.is_running ? `/timetable/${tableNumber}/member` : `/timetable/${tableNumber}/start`;
+    const res = await apiFetch(path, {
+      method:'POST',
+      body: JSON.stringify({ member_code: memberCode }),
+    });
+    if (!res?.ok) {
+      setMessage('Unable to check in this member.');
+      return;
+    }
+    await loadTables();
+    setMessage(`Member checked in to Table ${tableNumber}.`);
+  };
+
+  const startCameraScan = async () => {
+    if (scanning) return;
+    setScanMessage('');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setScanMessage('Camera access is not available in this browser. Use Manual Member ID.');
+      return;
+    }
+    let stream = null;
+    const stopScanning = () => {
+      stream?.getTracks().forEach(track => track.stop());
+      setScanning(false);
+    };
+    const handleScannedValue = async (value) => {
+      const memberCode = String(value || '').trim();
+      if (!memberCode) return false;
+      setManualMemberCode(memberCode);
+      setQuery(memberCode);
+      setScanMessage(`Scanned ${memberCode}`);
+      stopScanning();
+      await search(memberCode);
+      return true;
+    };
+    try {
+      setScanning(true);
+      setScanMessage('Point the camera at a member QR code.');
+      stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } } });
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      if ('BarcodeDetector' in window) {
+        const detector = new BarcodeDetector({ formats:['qr_code'] });
+        const scanOnce = async () => {
+          if (!videoRef.current) return;
+          const codes = await detector.detect(videoRef.current);
+          if (codes.length && await handleScannedValue(codes[0].rawValue)) return;
+          window.setTimeout(scanOnce, 700);
+        };
+        window.setTimeout(scanOnce, 900);
+        return;
+      }
+
+      const jsQR = await loadQrDecoder();
+      const scanWithCanvas = async () => {
+        const video = videoRef.current;
+        const canvas = scanCanvasRef.current;
+        if (!video || !canvas) return;
+        if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+          window.setTimeout(scanWithCanvas, 350);
+          return;
+        }
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d', { willReadFrequently:true });
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const result = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts:'attemptBoth' });
+        if (result?.data && await handleScannedValue(result.data)) return;
+        window.setTimeout(scanWithCanvas, 350);
+      };
+      window.setTimeout(scanWithCanvas, 900);
+    } catch (err) {
+      stopScanning();
+      setScanMessage(err?.name === 'NotAllowedError'
+        ? 'Camera permission was denied. Allow camera access or use Manual Member ID.'
+        : 'Camera QR scan could not start. Use Manual Member ID.');
+    }
+  };
+
+  if (!isAdmin) {
+    return (
+      <MemberPortalPage user={user} onLogout={onLogout}/>
+    );
+  }
+
+  if (membershipMode === 'member') {
+    return (
+      <div className="page-shell pixel-bg">
+        <div className="page-inner">
+          <div className="page-header" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:18,flexWrap:'wrap'}}>
+            <div>
+              <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'0',marginBottom:8}}>Membership</h1>
+              <p style={{color:'#888',fontSize:15}}>Switch between staff membership operations and the member-facing portal.</p>
+            </div>
+            <div style={{display:'flex',gap:8,background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:4}}>
+              {[
+                ['staff', 'Staff Dashboard'],
+                ['member', 'Member Portal'],
+              ].map(([id, label]) => (
+                <button key={id} onClick={() => setMembershipMode(id)} style={{background:membershipMode===id?T.accentRed:'transparent',color:membershipMode===id?'#fff':'#555',border:'none',borderRadius:6,padding:'9px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <MemberPortalPage user={user} onLogout={onLogout} embedded/>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page-shell pixel-bg">
+      <div className="page-inner">
+        <div className="page-header" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:18,flexWrap:'wrap'}}>
+          <div>
+            <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'0',marginBottom:8}}>Membership</h1>
+            <p style={{color:'#888',fontSize:15}}>Search members, scan QR codes, add packages, and check members into tables.</p>
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <button onClick={() => search('')} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
+              {loading ? 'Loading' : 'Refresh'}
+            </button>
+            <div style={{display:'flex',gap:8,background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:4}}>
+              {[
+                ['staff', 'Staff Dashboard'],
+                ['member', 'Member Portal'],
+              ].map(([id, label]) => (
+                <button key={id} onClick={() => setMembershipMode(id)} style={{background:membershipMode===id?T.accentRed:'transparent',color:membershipMode===id?'#fff':'#555',border:'none',borderRadius:6,padding:'9px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {message && <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',marginBottom:16,color:'#666',fontSize:13,fontWeight:700}}>{message}</div>}
+
+        <div className="membership-grid" style={{display:'grid',gridTemplateColumns:'minmax(300px, 0.9fr) minmax(320px, 1.1fr)',gap:18,alignItems:'start'}}>
+          <section style={{display:'grid',gap:14}}>
+            <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:18}}>
+              <div style={{fontSize:12,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:800,marginBottom:12}}>Find Member</div>
+              <div style={{display:'flex',gap:8,marginBottom:12}}>
+                <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&search(query)} placeholder="Name, email, phone, or Member ID" style={inputStyle}/>
+                <button onClick={() => search(query)} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'0 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Search</button>
+              </div>
+              <label style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Manual Member ID</label>
+              <div style={{display:'flex',gap:8}}>
+                <input value={manualMemberCode} onChange={e=>setManualMemberCode(e.target.value)} placeholder="FL00000000" style={inputStyle}/>
+                <button onClick={() => { setQuery(manualMemberCode); search(manualMemberCode); }} style={{background:'#1A1A18',color:'#fff',border:'none',borderRadius:8,padding:'0 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Lookup</button>
+              </div>
+            </div>
+
+            <div id="qr-scanner" style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:18}}>
+              <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center',marginBottom:12}}>
+                <div>
+                  <div style={{fontSize:12,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:800}}>QR Scanner</div>
+                  <div style={{fontSize:12,color:'#888',marginTop:3}}>{scanMessage}</div>
+                </div>
+                <button onClick={startCameraScan} style={{background:T.accentOrange,color:'#fff',border:'none',borderRadius:8,padding:'9px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>{scanning ? 'Scanning' : 'Scan QR'}</button>
+              </div>
+              <video ref={videoRef} autoPlay muted playsInline style={{width:'100%',maxHeight:180,background:'#f8f7f4',borderRadius:8,display:scanning?'block':'none',objectFit:'cover'}}/>
+              <canvas ref={scanCanvasRef} style={{display:'none'}}/>
+            </div>
+
+            <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:14,maxHeight:360,overflow:'auto'}}>
+              {members.length === 0 && <div style={{fontSize:13,color:'#999',padding:10}}>No members found.</div>}
+              {members.map(member => (
+                <button key={member.id} onClick={() => selectMember(member)} style={{
+                  width:'100%',textAlign:'left',background:selected?.id===member.id?`${T.accentRed}12`:'#fff',
+                  border:'1px solid #F0EDEA',borderRadius:8,padding:12,marginBottom:8,cursor:'pointer',fontFamily:'inherit'
+                }}>
+                  <div style={{fontWeight:800,color:'#1A1A18'}}>{member.name}</div>
+                  <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:'#777',marginTop:3}}>{member.member_code ? `${member.member_code} · ${member.phone}` : member.email}</div>
+                  <div style={{fontSize:12,color:T.accentRed,fontWeight:800,marginTop:4}}>{member.member_code ? `${formatHours(member.remaining_seconds)} remaining` : 'Account only · promotion available'}</div>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:20,minHeight:500}}>
+            {!selected ? (
+              <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'#999',fontWeight:700}}>Select a member.</div>
+            ) : (
+              <div>
+                <div style={{display:'flex',justifyContent:'space-between',gap:18,alignItems:'flex-start',marginBottom:18,flexWrap:'wrap'}}>
+                  <div>
+                    <h2 style={{fontSize:28,fontWeight:800,marginBottom:5}}>{selected.name}</h2>
+                    <div style={{fontFamily:'Space Mono,monospace',color:'#666',fontWeight:700}}>{selected.member_code || 'Account only'}</div>
+                    {selected.email && <div style={{color:'#777',fontSize:13,marginTop:4}}>{selected.email}</div>}
+                    {selected.phone && <div style={{color:'#777',fontSize:13,marginTop:4}}>{selected.phone}</div>}
+                  </div>
+                  <div style={{background:`${T.accentRed}12`,border:`1px solid ${T.accentRed}30`,borderRadius:8,padding:'12px 14px',minWidth:150}}>
+                    <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#B95B6B',fontWeight:800}}>{selected.member_code ? 'Remaining' : 'Capability'}</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:selected.member_code?24:14,fontWeight:800,color:T.accentRed}}>{selected.member_code ? formatHours(selected.remaining_seconds) : 'Account only'}</div>
+                  </div>
+                </div>
+
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))',gap:14,marginBottom:18}}>
+                  {!selected.member_code ? (
+                  <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
+                    <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Add Membership Capability</div>
+                    <div style={{display:'grid',gap:8}}>
+                      <input value={promotionPhone} onChange={e=>setPromotionPhone(e.target.value)} placeholder="Unique phone" type="tel" style={inputStyle}/>
+                      <button onClick={promoteMembership} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Promote to Member</button>
+                    </div>
+                  </div>
+                  ) : <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
+                    <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Member Profile</div>
+                    <div style={{display:'grid',gap:8}}>
+                      <input value={editForm.email} onChange={e=>setEditForm(prev=>({...prev,email:e.target.value}))} placeholder="Email" type="email" style={inputStyle}/>
+                      <input value={editForm.name} onChange={e=>setEditForm(prev=>({...prev,name:e.target.value}))} placeholder="Name" style={inputStyle}/>
+                      <input value={editForm.phone} onChange={e=>setEditForm(prev=>({...prev,phone:e.target.value}))} placeholder="Phone" type="tel" style={inputStyle}/>
+                      <input value={editForm.password} onChange={e=>setEditForm(prev=>({...prev,password:e.target.value}))} placeholder="New password (optional)" type="password" style={inputStyle}/>
+                      <textarea value={editForm.notes} onChange={e=>setEditForm(prev=>({...prev,notes:e.target.value}))} placeholder="Staff notes" rows="2" style={{...inputStyle,resize:'vertical'}}/>
+                      <label style={{display:'flex',alignItems:'center',gap:8,fontSize:12,fontWeight:800,color:'#555'}}>
+                        <input type="checkbox" checked={editForm.is_active} onChange={e=>setEditForm(prev=>({...prev,is_active:e.target.checked}))}/>
+                        Active membership
+                      </label>
+                      <button onClick={saveMember} style={{background:'#1A1A18',color:'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Save Member</button>
+                      <button onClick={removeMembership} style={{background:'#fff',color:'#B42318',border:'1px solid #F0B4AE',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Remove Membership</button>
+                    </div>
+                  </div>}
+
+                  <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
+                    <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Add Package</div>
+                    <div style={{display:'grid',gap:8}}>
+                      <input value={packageForm.package_name} onChange={e=>setPackageForm(prev=>({...prev,package_name:e.target.value}))} style={inputStyle}/>
+                      <input value={packageForm.hours} onChange={e=>setPackageForm(prev=>({...prev,hours:e.target.value}))} type="number" min="0.5" step="0.5" style={inputStyle}/>
+                      <button onClick={addPackage} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Add Hours</button>
+                    </div>
+                  </div>
+
+                  <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
+                    <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Table Check-in</div>
+                    <div style={{display:'grid',gap:8}}>
+                      <select value={checkInTable} onChange={e=>setCheckInTable(e.target.value)} style={inputStyle}>
+                        {Array.from({length:14}, (_,i)=>i+1).map(number => {
+                          const table = tables.find(row => row.table_number === number);
+                          return <option key={number} value={number}>Table {number}{table?.is_running ? ' - attach member' : ' - start timer'}</option>;
+                        })}
+                      </select>
+                      <button onClick={checkInMember} style={{background:'#1A1A18',color:'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Check In</button>
+                    </div>
+                  </div>
+
+                  <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14,textAlign:'center'}}>
+                    <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>QR Code</div>
+                    {selectedQrUrl ? (
+                      <img src={selectedQrUrl} alt="Member QR code" style={{width:136,height:136,objectFit:'contain',border:'1px solid #F0EDEA',borderRadius:8}}/>
+                    ) : (
+                      <div style={{width:136,height:136,display:'inline-flex',alignItems:'center',justifyContent:'center',border:'1px solid #F0EDEA',borderRadius:8,color:'#999',fontSize:12}}>QR</div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))',gap:14}}>
+                  <div>
+                    <h3 style={{fontSize:16,fontWeight:800,marginBottom:10}}>Purchase and Package History</h3>
+                    <div style={{display:'grid',gap:8}}>
+                      {(selected.packages || []).length === 0 && <div style={{fontSize:13,color:'#999'}}>No packages yet.</div>}
+                      {(selected.packages || []).map(pkg => (
+                        <div key={pkg.id} style={{borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                          <div style={{fontWeight:800}}>{pkg.package_name}</div>
+                          <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:T.accentRed}}>{formatHours(pkg.remaining_seconds)} / {formatHours(pkg.total_seconds)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 style={{fontSize:16,fontWeight:800,marginBottom:10}}>Visit History and Check-in Records</h3>
+                    <div style={{display:'grid',gap:8,maxHeight:260,overflow:'auto'}}>
+                      {(selected.visits || []).length === 0 && <div style={{fontSize:13,color:'#999'}}>No visits yet.</div>}
+                      {(selected.visits || []).map(visit => (
+                        <div key={visit.id} style={{borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                          <div style={{fontWeight:800}}>Table {visit.table_number}</div>
+                          <div style={{fontSize:12,color:'#777'}}>{formatDateTime(visit.checked_in_at)} to {formatDateTime(visit.checked_out_at)}</div>
+                          <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:T.accentRed}}>Charged {formatDuration(visit.charged_seconds)} · Deducted {formatDuration(visit.package_deducted_seconds)}</div>
+                          {visit.extra_due_seconds > 0 && <div style={{fontSize:12,color:'#B45309',fontWeight:800}}>Extra due {formatDuration(visit.extra_due_seconds)}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MemberPortalPage({ user, embedded = false, onLogout } = {}) {
+  const hasMembership = !!user?.member_code;
+  const [member, setMember] = useState(null);
+  const [packages, setPackages] = useState([]);
+  const [visits, setVisits] = useState([]);
+  const [qrUrl, setQrUrl] = useState('');
+  const memberLoadGenerationRef = useRef(0);
+  const currentAccountIdRef = useRef(user?.id);
+  const qrUrlRef = useRef('');
+  currentAccountIdRef.current = user?.id;
+
+  const replaceQrUrl = useCallback(nextUrl => {
+    if (qrUrlRef.current && qrUrlRef.current !== nextUrl) {
+      URL.revokeObjectURL(qrUrlRef.current);
+    }
+    qrUrlRef.current = nextUrl;
+    setQrUrl(nextUrl);
+  }, []);
+
+  const loadMemberData = useCallback(async (accountId, generation) => {
+    const isCurrentLoad = () => (
+      memberLoadGenerationRef.current === generation
+      && currentAccountIdRef.current === accountId
+    );
+    const me = await apiFetch('/members/me');
+    if (!me?.ok) return;
+    const profile = await me.json();
+    if (!isCurrentLoad()) return;
+    setMember(profile);
+    const [packageRes, visitRes, qrRes] = await Promise.all([
+      apiFetch('/members/me/packages'),
+      apiFetch('/members/me/visits'),
+      apiFetch('/members/me/qr'),
+    ]);
+    if (!isCurrentLoad()) return;
+    const [packageData, visitData, qrBlob] = await Promise.all([
+      packageRes?.ok ? packageRes.json() : null,
+      visitRes?.ok ? visitRes.json() : null,
+      qrRes?.ok ? qrRes.blob() : null,
+    ]);
+    if (packageData !== null) {
+      if (!isCurrentLoad()) return;
+      setPackages(packageData);
+    }
+    if (visitData !== null) {
+      if (!isCurrentLoad()) return;
+      setVisits(visitData);
+    }
+    if (qrBlob) {
+      if (!isCurrentLoad()) return;
+      const nextQrUrl = URL.createObjectURL(qrBlob);
+      if (!isCurrentLoad()) {
+        URL.revokeObjectURL(nextQrUrl);
+        return;
+      }
+      replaceQrUrl(nextQrUrl);
+    }
+  }, [replaceQrUrl]);
+
+  useEffect(() => {
+    return () => {
+      memberLoadGenerationRef.current += 1;
+      if (qrUrlRef.current) URL.revokeObjectURL(qrUrlRef.current);
+      qrUrlRef.current = '';
+    };
+  }, []);
+
+  useEffect(() => {
+    const accountId = user?.id;
+    const generation = ++memberLoadGenerationRef.current;
+    setMember(null);
+    setPackages([]);
+    setVisits([]);
+    replaceQrUrl('');
+    if (hasMembership && accountId) loadMemberData(accountId, generation);
+    return () => {
+      if (memberLoadGenerationRef.current === generation) {
+        memberLoadGenerationRef.current += 1;
+      }
+    };
+  }, [hasMembership, loadMemberData, replaceQrUrl, user?.id]);
+
+  const logout = () => {
+    memberLoadGenerationRef.current += 1;
+    onLogout?.();
+  };
+
+  const membershipStatus = () => {
+    if (!user) {
+      return (
+        <section style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22}}>
+          <h2 style={{fontSize:22,fontWeight:800,marginBottom:10}}>Sign in to view Membership</h2>
+          <p style={{color:'#777',lineHeight:1.7}}>Use the Member Sign In button in the site header to sign in or create an account.</p>
+        </section>
+      );
+    }
+    if (!hasMembership) {
+      return (
+        <section role="status" style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22}}>
+          <h2 style={{fontSize:22,fontWeight:800,marginBottom:10}}>Membership profile required</h2>
+          <p style={{color:'#777',lineHeight:1.7}}>Membership profile required. Ask an administrator to add a phone number and Member ID to this account.</p>
+        </section>
+      );
+    }
+    if (!member) {
+      return (
+        <section role="status" style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22}}>
+          <Spinner size={18}/> Loading membership profile...
+        </section>
+      );
+    }
+    return null;
+  };
+
+  const status = membershipStatus();
+
+  const content = (
+      <div className="page-inner" style={{maxWidth:980}}>
+        <div className="page-header">
+          <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'0',marginBottom:8}}>My Membership</h1>
+          <p style={{color:'#888',fontSize:15}}>View your QR code, remaining package hours, purchase history, and visit history.</p>
+        </div>
+
+        {status || (
+          <div className="member-profile-grid" style={{display:'grid',gridTemplateColumns:'minmax(260px, 340px) 1fr',gap:18,alignItems:'start'}}>
+            <aside style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22,textAlign:'center'}}>
+              <h2 style={{fontSize:26,fontWeight:800,marginBottom:5}}>{member.name}</h2>
+              <div style={{fontFamily:'Space Mono,monospace',color:'#666',fontWeight:700,marginBottom:14}}>{member.member_code}</div>
+              {qrUrl && <img src={qrUrl} alt="Member QR code" style={{width:210,height:210,objectFit:'contain',border:'1px solid #F0EDEA',borderRadius:8,marginBottom:14}}/>}
+              <div style={{background:`${T.accentRed}12`,borderRadius:8,padding:14,marginBottom:14}}>
+                <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#B95B6B',fontWeight:800}}>Remaining Hours</div>
+                <div style={{fontFamily:'Space Mono,monospace',fontSize:28,fontWeight:800,color:T.accentRed}}>{formatHours(member.remaining_seconds)}</div>
+              </div>
+              <button onClick={logout} style={{background:'#f2f1ee',color:'#555',border:'none',borderRadius:8,padding:'10px 16px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Sign out</button>
+            </aside>
+
+            <section style={{display:'grid',gap:18}}>
+              <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:20}}>
+                <h3 style={{fontSize:18,fontWeight:800,marginBottom:12}}>Purchase and Package History</h3>
+                <div style={{display:'grid',gap:8}}>
+                  {packages.length === 0 && <div style={{fontSize:13,color:'#999'}}>No packages yet.</div>}
+                  {packages.map(pkg => (
+                    <div key={pkg.id} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:12,borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                      <div>
+                        <div style={{fontWeight:800}}>{pkg.package_name}</div>
+                        <div style={{fontSize:12,color:'#888'}}>{pkg.purchased_at ? formatDateTime(pkg.purchased_at) : 'Package purchase'}</div>
+                      </div>
+                      <div style={{fontFamily:'Space Mono,monospace',fontWeight:800,color:T.accentRed}}>{formatHours(pkg.remaining_seconds)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:20}}>
+                <h3 style={{fontSize:18,fontWeight:800,marginBottom:12}}>Visit History</h3>
+                <div style={{display:'grid',gap:8}}>
+                  {visits.length === 0 && <div style={{fontSize:13,color:'#999'}}>No visits yet.</div>}
+                  {visits.map(visit => (
+                    <div key={visit.id} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:12,borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                      <div>
+                        <div style={{fontWeight:800}}>Table {visit.table_number}</div>
+                        <div style={{fontSize:12,color:'#888'}}>{formatDateTime(visit.checked_in_at)} to {formatDateTime(visit.checked_out_at)}</div>
+                      </div>
+                      <div style={{textAlign:'right'}}>
+                        <div style={{fontFamily:'Space Mono,monospace',fontWeight:800,color:T.accentRed}}>{formatDuration(visit.charged_seconds)}</div>
+                        {visit.extra_due_seconds > 0 && <div style={{fontSize:12,color:'#B45309',fontWeight:800}}>Due {formatDuration(visit.extra_due_seconds)}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <div className="page-shell pixel-bg">
+      {content}
+    </div>
+  );
+}
+
 // ─── LOGIN MODAL ──────────────────────────────────────────────────────────────
 function LoginModal({ onClose, onLogin }) {
-  const [tab, setTab] = useState('login');
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  const [name, setName] = useState('');
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ identifier:'', email:'', name:'', phone:'', password:'', passwordConfirmation:'' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const firstInputRef = useRef(null);
+
+  useEffect(() => {
+    firstInputRef.current?.focus();
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+
+  useEffect(() => {
+    setError('');
+    window.setTimeout(() => firstInputRef.current?.focus(), 0);
+  }, [mode]);
+
+  const readError = async (res, fallback) => {
+    try { return (await res.json())?.detail || fallback; } catch (_) { return fallback; }
+  };
 
   const submit = async () => {
-    if (!email || !pass) { setError('Please fill in all fields'); return; }
+    if (mode === 'register') {
+      if (!form.email.trim() || !form.name.trim() || !form.phone.trim() || !form.password || !form.passwordConfirmation) {
+        setError('Please fill in all fields');
+        return;
+      }
+      if (form.password !== form.passwordConfirmation) {
+        setError('Passwords do not match');
+        return;
+      }
+    } else if (!form.identifier.trim() || !form.password) {
+      setError('Please fill in all fields');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      const endpoint = tab === 'login' ? '/auth/login' : '/auth/register';
-      const body = tab === 'login'
-        ? { email, password: pass }
-        : { email, password: pass, name: name.trim() || email.split('@')[0] };
-      const res = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(body) });
+      if (mode === 'register') {
+        const res = await apiFetch('/auth/register', {
+          method:'POST',
+          body:JSON.stringify({
+            email:form.email,
+            name:form.name,
+            phone:form.phone,
+            password:form.password,
+            password_confirmation:form.passwordConfirmation,
+          }),
+        });
+        if (!res) {
+          setError('Cannot reach the server. Please try again.');
+          return;
+        }
+        if (!res.ok) {
+          setError(await readError(res, 'Unable to register member.'));
+          return;
+        }
+        const data = await res.json();
+        onLogin(data.user, data.access_token);
+        onClose();
+        return;
+      }
+
+      const res = await apiFetch('/auth/login', {
+        method:'POST',
+        body:JSON.stringify({ identifier:form.identifier, password:form.password }),
+      });
       if (!res) {
         setError('Cannot reach the server. Run: docker compose up --build');
         return;
       }
       if (!res.ok) {
-        let detail = 'Authentication failed';
-        try { detail = (await res.json())?.detail || detail; } catch (_) {}
-        setError(detail);
+        setError(await readError(res, 'Invalid email, phone, Member ID, or password.'));
         return;
       }
       const data = await res.json();
@@ -1309,32 +3776,36 @@ function LoginModal({ onClose, onLogin }) {
 
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(26,26,24,0.6)',backdropFilter:'blur(6px)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={onClose}>
-      <div className="scale-in" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:20,width:380,padding:36,boxShadow:'0 24px 80px rgba(0,0,0,0.2)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:28,justifyContent:'center'}}>
+      <div className="scale-in" role="dialog" aria-modal="true" aria-labelledby="login-title" onClick={e=>e.stopPropagation()} style={{position:'relative',background:'#fff',borderRadius:20,width:'min(420px, calc(100vw - 32px))',maxHeight:'calc(100dvh - 32px)',overflowY:'auto',padding:36,boxShadow:'0 24px 80px rgba(0,0,0,0.2)'}}>
+        <button type="button" onClick={onClose} aria-label="Close sign in" style={{position:'absolute',top:14,right:14,width:34,height:34,border:'1px solid #E8E6E1',borderRadius:8,background:'#fff',color:'#6F666B',fontSize:22,lineHeight:1,cursor:'pointer'}}>&times;</button>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,justifyContent:'center'}}>
           <div style={{width:40,height:40,borderRadius:8,overflow:'hidden',flexShrink:0}}>
-            <img src="/funlab-logo.jpeg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab" onError={e=>e.target.style.display='none'}/>
+            <img src="/logo.jpg" style={{width:'100%',height:'100%',objectFit:'cover'}} alt="FunLab AU" onError={e=>e.target.style.display='none'}/>
           </div>
-          <span style={{fontWeight:800,fontSize:18}}><span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>拼豆</span></span>
+          <span style={{fontWeight:800,fontSize:18}}><span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span></span>
         </div>
+        <h2 id="login-title" style={{fontSize:22,fontWeight:800,textAlign:'center',marginBottom:6}}>{mode === 'login' ? 'Welcome back' : 'Join FunLab'}</h2>
+        <p style={{color:'#777',fontSize:13,textAlign:'center',marginBottom:18}}>{mode === 'login' ? 'Sign in to your member account.' : 'Create one account for the site and Membership.'}</p>
 
-        <div style={{display:'flex',background:'#f2f1ee',borderRadius:10,padding:4,marginBottom:24}}>
-          {['login','signup'].map(t=>(
-            <button key={t} onClick={()=>{setTab(t);setError('');}} style={{flex:1,padding:'8px 0',border:'none',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:13,transition:'all 0.15s',background:tab===t?'#fff':'transparent',color:tab===t?'#1A1A18':'#888',boxShadow:tab===t?'0 1px 4px rgba(0,0,0,0.1)':'none'}}>{t==='login'?'Sign In':'Create Account'}</button>
+        <div style={{display:'flex',gap:8,background:'#f5f3f1',borderRadius:8,padding:4,marginBottom:20}}>
+          {[['login','Sign In'],['register','Register']].map(([id,label]) => (
+            <button key={id} type="button" onClick={()=>setMode(id)} style={{flex:1,border:'none',borderRadius:6,padding:'9px 0',background:mode===id?'#fff':'transparent',color:mode===id?T.accentRed:'#666',boxShadow:mode===id?'0 2px 8px rgba(26,26,24,0.08)':'none',fontFamily:'inherit',fontWeight:800,cursor:'pointer'}}>{label}</button>
           ))}
         </div>
 
-        {tab === 'signup' && (
-          <div style={{marginBottom:14}}>
-            <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>Name</label>
-            <input type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" style={inputStyle}
-              onFocus={e=>e.target.style.borderColor=T.accentRed} onBlur={e=>e.target.style.borderColor='#e8e6e1'}/>
-          </div>
-        )}
-
-        {[{label:'Email',type:'email',value:email,set:setEmail,placeholder:'you@example.com'},{label:'Password',type:'password',value:pass,set:setPass,placeholder:'••••••••'}].map(f=>(
+        {(mode === 'login' ? [
+          {id:'login-identifier',label:'Email, phone, or Member ID',type:'text',key:'identifier',placeholder:'you@example.com or FL00000000',autoComplete:'username'},
+          {id:'login-password',label:'Password',type:'password',key:'password',placeholder:'Password',autoComplete:'current-password'},
+        ] : [
+          {id:'register-email',label:'Email',type:'email',key:'email',placeholder:'you@example.com',autoComplete:'email'},
+          {id:'register-name',label:'Name',type:'text',key:'name',placeholder:'Your name',autoComplete:'name'},
+          {id:'register-phone',label:'Phone',type:'tel',key:'phone',placeholder:'+60 12-345 6789',autoComplete:'tel'},
+          {id:'register-password',label:'Password',type:'password',key:'password',placeholder:'Password',autoComplete:'new-password'},
+          {id:'register-password-confirmation',label:'Confirm password',type:'password',key:'passwordConfirmation',placeholder:'Confirm password',autoComplete:'new-password'},
+        ]).map((f,index)=>(
           <div key={f.label} style={{marginBottom:14}}>
-            <label style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>{f.label}</label>
-            <input type={f.type} value={f.value} onChange={e=>f.set(e.target.value)} placeholder={f.placeholder}
+            <label htmlFor={f.id} style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>{f.label}</label>
+            <input id={f.id} ref={index === 0 ? firstInputRef : undefined} type={f.type} value={form[f.key]} onChange={e=>setForm(prev=>({...prev,[f.key]:e.target.value}))} placeholder={f.placeholder} autoComplete={f.autoComplete}
               onKeyDown={e=>e.key==='Enter'&&submit()}
               style={inputStyle}
               onFocus={e=>e.target.style.borderColor=T.accentRed}
@@ -1351,7 +3822,7 @@ function LoginModal({ onClose, onLogin }) {
           fontWeight:700,fontSize:14,cursor:loading?'default':'pointer',fontFamily:'inherit',transition:'all 0.2s',
           display:'flex',alignItems:'center',justifyContent:'center',gap:8
         }}>
-          {loading ? <><Spinner size={14}/> {tab==='login'?'Signing in…':'Creating account…'}</> : tab==='login'?'Sign In →':'Create Account →'}
+          {loading ? <><Spinner size={14}/> {mode === 'login' ? 'Signing in...' : 'Creating account...'}</> : mode === 'login' ? 'Sign In' : 'Create Membership'}
         </button>
 
       </div>
@@ -1360,8 +3831,16 @@ function LoginModal({ onClose, onLogin }) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+function getInitialPage() {
+  const queryPage = new URLSearchParams(window.location.search).get('page');
+  const allowed = new Set(['home', 'gallery', 'favorites', 'timetable', 'membership', 'admin']);
+  if (allowed.has(queryPage)) return queryPage;
+  const storedPage = localStorage.getItem('pc_page');
+  return allowed.has(storedPage) ? storedPage : 'home';
+}
+
 function App() {
-  const [page, setPage] = useState(() => localStorage.getItem('pc_page') || 'gallery');
+  const [page, setPage] = useState(getInitialPage);
   const [patterns, setPatterns] = useState([]);
   const [patternsLoading, setPatternsLoading] = useState(true);
   const [favIds, setFavIds] = useState(new Set());
@@ -1369,17 +3848,36 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
   const [openPattern, setOpenPattern] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notification, setNotification] = useState(null);
+
+  const notify = useCallback((message, tone = 'info') => {
+    setNotification({ id: Date.now(), message, tone });
+  }, []);
+
+  useEffect(() => {
+    if (!notification) return;
+    const notificationId = notification.id;
+    const timer = window.setTimeout(() => {
+      setNotification(current => current?.id === notificationId ? null : current);
+    }, 4200);
+    return () => window.clearTimeout(timer);
+  }, [notification]);
 
   const loadPatterns = useCallback(async () => {
     setPatternsLoading(true);
     try {
       const res = await apiFetch('/patterns');
       const data = res?.ok ? await res.json() : null;
-      if (data) setPatterns(data.map(normalizePattern));
+      if (data) {
+        setPatterns(data.map(normalizePattern));
+      } else {
+        notify('Could not load the pattern library. Please try again.', 'error');
+      }
     } finally {
       setPatternsLoading(false);
     }
-  }, []);
+  }, [notify]);
 
   const loadFavIds = useCallback(async () => {
     const res = await apiFetch('/favorites/ids');
@@ -1389,27 +3887,37 @@ function App() {
     }
   }, []);
 
-  // Validate existing token on mount
+  // Validate the one shared account session on mount.
   useEffect(() => {
     const token = localStorage.getItem('pc_token');
     if (!token) { setAuthLoading(false); return; }
     apiFetch('/auth/me').then(async res => {
       if (res?.ok) {
-        const userData = await res.json();
-        setUser(userData);
+        const account = await res.json();
+        setUser(storeAccountSession(account, token));
         loadFavIds();
       } else {
-        localStorage.removeItem('pc_token');
+        clearAccountSession();
+        notify(res ? 'Your session expired. Please sign in again.' : 'Could not verify your session. Please sign in again.', 'error');
       }
-    }).catch(() => localStorage.removeItem('pc_token'))
+    }).catch(() => {
+      clearAccountSession();
+      notify('Could not verify your session. Please sign in again.', 'error');
+    })
       .finally(() => setAuthLoading(false));
-  }, []);
+  }, [loadFavIds, notify]);
 
   useEffect(() => { loadPatterns(); }, [loadPatterns]);
   useEffect(() => {
     if (!authLoading && page === 'admin' && !user?.is_admin) setPage('gallery');
   }, [authLoading, page, user?.is_admin]);
   useEffect(() => { localStorage.setItem('pc_page', page); }, [page]);
+  useEffect(() => { setMobileMenuOpen(false); }, [page]);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    if (mobileMenuOpen) document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [mobileMenuOpen]);
 
   const onFave = async (id) => {
     if (!user) { setShowLogin(true); return; }
@@ -1432,6 +3940,7 @@ function App() {
         ? { ...p, faves: wasFaved ? p.faves + 1 : p.faves - 1, faves_count: wasFaved ? p.faves_count + 1 : p.faves_count - 1 }
         : p
       ));
+      notify('Unable to update favorites. Please try again.', 'error');
     }
   };
 
@@ -1442,20 +3951,38 @@ function App() {
       setOpenPattern(normalizePattern(await res.json()));
     } else {
       setOpenPattern(pattern);
+      notify('Could not load the full pattern. Showing the available preview.', 'error');
     }
   };
 
+  const onDeletePattern = async (id) => {
+    const res = await apiFetch(`/patterns/${id}`, { method: 'DELETE' });
+    if (!res?.ok) {
+      notify('Unable to delete this pattern. Please try again.', 'error');
+      return;
+    }
+    setPatterns(prev => prev.filter(p => p.id !== id));
+    setFavIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setOpenPattern(prev => prev?.id === id ? null : prev);
+    notify('Pattern deleted.', 'success');
+  };
+
   const onLogin = (userData, token) => {
-    localStorage.setItem('pc_token', token);
-    setUser(userData);
+    setUser(storeAccountSession(userData, token));
     loadFavIds();
+    notify(`Signed in as ${userData.name}.`, 'success');
   };
 
   const onLogout = () => {
-    localStorage.removeItem('pc_token');
+    clearAccountSession();
     setUser(null);
     setFavIds(new Set());
     if (page === 'admin') setPage('gallery');
+    notify('Signed out.', 'success');
   };
 
   if (authLoading) {
@@ -1468,20 +3995,50 @@ function App() {
 
   return (
     <div style={{minHeight:'100vh',background:T.bgColor}}>
-      <Navbar page={page} setPage={setPage} user={user} onLoginClick={() => setShowLogin(true)} onLogout={onLogout}/>
+      <Navbar
+        page={page}
+        setPage={setPage}
+        user={user}
+        onLoginClick={() => setShowLogin(true)}
+        onLogout={onLogout}
+        onMobileMenuClick={() => setMobileMenuOpen(true)}
+        mobileMenuOpen={mobileMenuOpen}
+      />
+      <MobileNavDrawer
+        page={page}
+        setPage={setPage}
+        user={user}
+        onLoginClick={() => setShowLogin(true)}
+        onLogout={onLogout}
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
+      <main className="app-content">
+      {page === 'home' && (
+        <OfficialHome setPage={setPage} onLoginClick={() => setShowLogin(true)}/>
+      )}
       {page === 'gallery' && (
-        <GalleryPage patterns={patterns} loading={patternsLoading} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user}/>
+        <GalleryPage patterns={patterns} loading={patternsLoading} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user} onPatternDeleted={onDeletePattern}/>
       )}
       {page === 'favorites' && (
         <FavoritesPage patterns={patterns} favIds={favIds} onFave={onFave} onOpen={onOpen} user={user} onLoginClick={() => setShowLogin(true)}/>
       )}
+      {page === 'timetable' && (
+        <TimeTablePage user={user}/>
+      )}
+      {page === 'membership' && (
+        <MembershipPage user={user} onLogout={onLogout}/>
+      )}
       {page === 'admin' && user?.is_admin && (
         <AdminPage onPatternPublished={loadPatterns}/>
       )}
+      </main>
+
+      <AppNotification notification={notification} onDismiss={() => setNotification(null)}/>
 
       {openPattern && (
-        <BeadMapViewer pattern={openPattern} onClose={() => setOpenPattern(null)} user={user}/>
+        <BeadMapViewer pattern={openPattern} onClose={() => setOpenPattern(null)} user={user} notify={notify}/>
       )}
       {showLogin && (
         <LoginModal onClose={() => setShowLogin(false)} onLogin={onLogin}/>

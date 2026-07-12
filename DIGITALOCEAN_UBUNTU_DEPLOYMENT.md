@@ -134,6 +134,35 @@ sudo docker compose --project-name pixelcraft --env-file .env up --build -d
 
 ## 6. Backups
 
+Before each container start, the deployment script checks for
+`pixelcraft_pindou_data`. If the database exists, it creates a timestamped backup
+outside that volume, such as
+`/opt/pixelcraft/backups/pindou-20260712-153000.db`, and prints the verified path.
+The script uses SQLite's online backup API and `PRAGMA integrity_check`; a copy or
+integrity failure aborts deployment before migrations start.
+
+At the start of a deployment attempt, the script writes the currently running Git
+revision to `/opt/pixelcraft/.previous-deploy-commit`, clears the old backup pointer,
+and creates an in-progress marker. The first verified backup is persisted in
+`/opt/pixelcraft/.rollback-backup`. If deployment fails, retries preserve both
+pointers; later backups are diagnostic only. After health verification, the script
+records `.last-successful-deploy-commit` and clears the marker so a future deployment
+can create a fresh checkpoint. Uploaded source folders without Git metadata cannot
+provide commit rollback, so the script logs that limitation and you must retain the
+prior uploaded release.
+
+The unified-account release rotates `SECRET_KEY` once after the verified backup and
+persists a marker in `.env`. This intentionally signs all users out once. Repeated
+deployments keep the rotated key.
+
+For an existing installation, the script stops the public frontend and backend before
+creating that backup. It starts only the private backend for migration and an internal
+`/health` check, keeping public writes blocked until the check succeeds. It then resumes
+the complete stack and verifies the public endpoint. If failure occurs before container
+replacement, the previously running services are restarted automatically; after
+replacement begins, the frontend remains stopped for safe checkpoint rollback. Retries
+continue to preserve the original commit and first verified backup pointers.
+
 Back up the SQLite database:
 
 ```bash
@@ -163,6 +192,29 @@ Copy backups to your computer:
 scp root@YOUR_DROPLET_IP:/opt/pixelcraft/backup.db .
 scp root@YOUR_DROPLET_IP:/opt/pixelcraft/uploads.tar.gz .
 ```
+
+### Roll back a migration deployment
+
+Read the rollback commit and first verified backup from the failed attempt's
+persisted checkpoint. Do not select a later diagnostic backup created by a retry.
+If `.rollback-backup` is absent, the attempt began without an existing database and
+there is no database backup to restore. Git-based deployments can restore the
+recorded revision:
+
+```bash
+set -e
+cd /opt/pixelcraft
+BACKUP="$(sudo cat /opt/pixelcraft/.rollback-backup)"
+PREVIOUS_COMMIT="$(sudo cat /opt/pixelcraft/.previous-deploy-commit)"
+sudo docker compose --project-name pixelcraft --env-file .env down
+MOUNTPOINT="$(sudo docker volume inspect pixelcraft_pindou_data --format '{{ .Mountpoint }}')"
+sudo install -m 0600 "${BACKUP}" "${MOUNTPOINT}/pindou.db"
+sudo git checkout "${PREVIOUS_COMMIT}"
+sudo docker compose --project-name pixelcraft --env-file .env up --build -d
+```
+
+Never use `docker compose down -v` during rollback. The `-v` option deletes the
+named database and upload volumes.
 
 ## 7. Optional HTTPS
 

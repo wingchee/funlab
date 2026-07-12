@@ -26,8 +26,8 @@ functions:
   generate_bean_buddy_design:
     _type: generate_bean_buddy_design
     description: "生成拼豆设计图和材料清单"
-    # 色卡模版，目前支持[卡卡、mard、漫漫、优肯拼豆、盼盼、咪小窝、黄豆豆、coco、柿柿拼豆、小舞]
-    color_card_template: "卡卡"
+    # 色卡模版：固定使用 mard 221 色卡
+    color_card_template: "mard"
     # rembg 模型名称，默认 isnet-general-use，进行图片处理
     #  - "u2net" (通用模型)
     #  - "u2netp" (轻量版)

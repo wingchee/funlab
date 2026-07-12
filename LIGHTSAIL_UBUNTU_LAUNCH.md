@@ -85,6 +85,35 @@ sudo docker compose --project-name pixelcraft --env-file .env up --build -d
 
 ## 6. Troubleshooting
 
+### No pixelcraft log file
+
+If this command fails:
+
+```bash
+sudo tail -f /var/log/pixelcraft-lightsail-launch.log
+```
+
+then the PixelCraft launch script probably never started. Check Lightsail/cloud-init's own first-boot output:
+
+```bash
+sudo tail -n 200 /var/log/cloud-init-output.log
+sudo cloud-init status --long
+```
+
+Common causes:
+
+- The launch script was not pasted before the instance was created.
+- The instance was created from a non-Ubuntu blueprint.
+- `REPO_URL=""` was left empty in the launch script.
+- A launch script added after instance creation was expected to run; Lightsail launch scripts run only on first boot.
+
+If the script was not present at creation time, create a new instance with the edited launch script, or SSH into this instance and run the manual deployment script instead:
+
+```bash
+cd /opt/pixelcraft
+sudo APP_DIR=/opt/pixelcraft PORT=80 COMPOSE_PROJECT_NAME=pixelcraft scripts/deploy_digitalocean_ubuntu.sh
+```
+
 If the page does not load:
 
 ```bash

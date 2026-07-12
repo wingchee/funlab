@@ -21,6 +21,7 @@ def _serialize(p: models.Pattern) -> dict:
         "faves_count": p.faves_count,
         "preview_color": p.preview_color,
         "palette": json.loads(p.palette),
+        "grid_data": json.loads(p.grid_data),
         "created_at": p.created_at.isoformat() if p.created_at else None,
     }
 

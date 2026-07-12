@@ -11,7 +11,7 @@ from database import get_db
 router = APIRouter()
 
 
-def _serialize(p: models.Pattern, *, include_grid: bool = False) -> dict:
+def _serialize(p: models.Pattern) -> dict:
     d = {
         "id": p.id,
         "title": p.title,
@@ -22,10 +22,9 @@ def _serialize(p: models.Pattern, *, include_grid: bool = False) -> dict:
         "faves_count": p.faves_count,
         "preview_color": p.preview_color,
         "palette": json.loads(p.palette),
+        "grid_data": json.loads(p.grid_data),
         "created_at": p.created_at.isoformat() if p.created_at else None,
     }
-    if include_grid:
-        d["grid_data"] = json.loads(p.grid_data)
     return d
 
 
@@ -50,7 +49,7 @@ def get_pattern(pattern_id: int, db: Session = Depends(get_db)):
     p = db.query(models.Pattern).filter(models.Pattern.id == pattern_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Pattern not found")
-    return _serialize(p, include_grid=True)
+    return _serialize(p)
 
 
 @router.delete("/{pattern_id}")

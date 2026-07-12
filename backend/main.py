@@ -7,8 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from database import engine, Base
-from routers import auth, patterns, favorites, admin
+from routers import auth, patterns, favorites, admin, timetable, memberships
 from seed import seed_demo_data
 
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -18,7 +17,6 @@ _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 async def lifespan(app: FastAPI):
     os.makedirs("data", exist_ok=True)
     os.makedirs("uploads", exist_ok=True)
-    Base.metadata.create_all(bind=engine)
     seed_demo_data()
     yield
 
@@ -37,6 +35,8 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(patterns.router, prefix="/api/patterns", tags=["patterns"])
 app.include_router(favorites.router, prefix="/api/favorites", tags=["favorites"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(timetable.router, prefix="/api/timetable", tags=["timetable"])
+app.include_router(memberships.router, prefix="/api/members", tags=["members"])
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -54,5 +54,5 @@ if _FRONTEND_DIR.is_dir():
         return FileResponse(_FRONTEND_DIR / "funlab-logo.jpeg", media_type="image/jpeg")
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    def _spa(_: str):
+    def _spa(full_path: str):
         return FileResponse(_FRONTEND_DIR / "index.html", media_type="text/html")

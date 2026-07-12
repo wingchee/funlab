@@ -25,3 +25,4 @@ outputs/
 *.log
 tmp/
 temp/
+.superpowers/

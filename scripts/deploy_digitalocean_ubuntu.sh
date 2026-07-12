@@ -7,6 +7,11 @@ PORT="${PORT:-80}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pixelcraft}"
 ENABLE_UFW="${ENABLE_UFW:-true}"
 SKIP_DOCKER_INSTALL="${SKIP_DOCKER_INSTALL:-false}"
+BACKEND_WAS_RUNNING=false
+FRONTEND_WAS_RUNNING=false
+WRITES_QUIESCED=false
+BACKEND_REPLACEMENT_STARTED=false
+RECOVERY_ATTEMPTED=false
 
 log() {
   printf '\n[%s] %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$*"
@@ -33,6 +38,39 @@ compose() {
   fi
 }
 
+quiesce_writes() {
+  local backend_id frontend_id
+  backend_id="$(compose ps --status running -q backend 2>/dev/null || true)"
+  frontend_id="$(compose ps --status running -q frontend 2>/dev/null || true)"
+  [[ -n "${backend_id}" ]] && BACKEND_WAS_RUNNING=true
+  [[ -n "${frontend_id}" ]] && FRONTEND_WAS_RUNNING=true
+  if [[ "${BACKEND_WAS_RUNNING}" == "true" || "${FRONTEND_WAS_RUNNING}" == "true" ]]; then
+    log "Quiescing public writes before the rollback backup"
+    WRITES_QUIESCED=true
+    compose stop frontend backend
+  else
+    log "No running backend or frontend to quiesce"
+    WRITES_QUIESCED=true
+  fi
+}
+
+recover_quiesced_services() {
+  local status="${1:-1}"
+  trap - ERR
+  if [[ "${RECOVERY_ATTEMPTED}" == "true" ]]; then
+    return "${status}"
+  fi
+  RECOVERY_ATTEMPTED=true
+  if [[ "${WRITES_QUIESCED}" == "true" && "${BACKEND_REPLACEMENT_STARTED}" != "true" ]]; then
+    log "Deployment failed before replacement; restarting the prior service state"
+    [[ "${BACKEND_WAS_RUNNING}" == "true" ]] && compose start backend || true
+    [[ "${FRONTEND_WAS_RUNNING}" == "true" ]] && compose start frontend || true
+  elif [[ "${WRITES_QUIESCED}" == "true" ]]; then
+    log "Deployment failed after backend replacement began; public writes remain blocked for checkpoint rollback"
+  fi
+  return "${status}"
+}
+
 require_ubuntu() {
   [[ -r /etc/os-release ]] || fail "This script is intended for Ubuntu droplets."
   # shellcheck disable=SC1091
@@ -49,7 +87,7 @@ require_project_files() {
 install_base_packages() {
   log "Installing base Ubuntu packages"
   sudo_cmd apt-get update
-  sudo_cmd apt-get install -y ca-certificates curl git gnupg lsb-release openssl ufw
+  sudo_cmd apt-get install -y ca-certificates curl git gnupg lsb-release openssl python3 ufw
 }
 
 install_docker() {
@@ -98,9 +136,9 @@ ensure_env_file() {
 
   if [[ ! -f "${ENV_FILE}" ]]; then
     if [[ -f "${APP_DIR}/.env.example" ]]; then
-      cp "${APP_DIR}/.env.example" "${ENV_FILE}"
+      sudo_cmd cp "${APP_DIR}/.env.example" "${ENV_FILE}"
     else
-      touch "${ENV_FILE}"
+      sudo_cmd touch "${ENV_FILE}"
     fi
   fi
 
@@ -112,7 +150,123 @@ ensure_env_file() {
 
   set_env_value "PORT" "${PORT}"
   set_env_value "COMPOSE_PROJECT_NAME" "${COMPOSE_PROJECT_NAME}"
-  chmod 600 "${ENV_FILE}"
+  sudo_cmd chmod 600 "${ENV_FILE}"
+}
+
+current_git_revision() {
+  sudo_cmd git -C "${APP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  sudo_cmd git -C "${APP_DIR}" rev-parse HEAD
+}
+
+write_checkpoint_value() {
+  local path="$1"
+  local value="$2"
+  printf '%s\n' "${value}" | sudo_cmd tee "${path}" >/dev/null
+  sudo_cmd chmod 0600 "${path}"
+}
+
+begin_deployment_checkpoint() {
+  local in_progress="${APP_DIR}/.deploy-in-progress"
+  local rollback_commit="${APP_DIR}/.previous-deploy-commit"
+  local rollback_backup="${APP_DIR}/.rollback-backup"
+  local last_successful="${APP_DIR}/.last-successful-deploy-commit"
+
+  if sudo_cmd test -f "${in_progress}"; then
+    log "Resuming an in-progress deployment; preserving rollback checkpoint"
+    return
+  fi
+
+  sudo_cmd rm -f "${rollback_backup}" "${rollback_commit}"
+  local revision=""
+  if sudo_cmd test -s "${last_successful}"; then
+    revision="$(sudo_cmd cat "${last_successful}")"
+    log "Using the last successful deployment as the rollback commit"
+  elif revision="$(current_git_revision)"; then
+    log "Captured the currently running Git revision for rollback"
+  else
+    log "No Git metadata or last-successful revision; commit rollback is unavailable"
+  fi
+
+  if [[ -n "${revision}" ]]; then
+    write_checkpoint_value "${rollback_commit}" "${revision}"
+  fi
+  sudo_cmd touch "${in_progress}"
+  sudo_cmd chmod 0600 "${in_progress}"
+  log "Started a new persisted deployment checkpoint"
+}
+
+persist_rollback_backup_once() {
+  local backup_path="$1"
+  local rollback_backup="${APP_DIR}/.rollback-backup"
+  if sudo_cmd test -s "${rollback_backup}"; then
+    log "Rollback backup already recorded for this deployment attempt; preserving it"
+    return
+  fi
+  write_checkpoint_value "${rollback_backup}" "${backup_path}"
+  log "Recorded rollback backup for this deployment attempt: ${backup_path}"
+}
+
+complete_deployment_checkpoint() {
+  local in_progress="${APP_DIR}/.deploy-in-progress"
+  local last_successful="${APP_DIR}/.last-successful-deploy-commit"
+  local revision=""
+  if revision="$(current_git_revision)"; then
+    write_checkpoint_value "${last_successful}" "${revision}"
+    log "Recorded the new deployment as last successful"
+  else
+    sudo_cmd rm -f "${last_successful}"
+    log "Deployment verified without Git metadata; no last-successful commit recorded"
+  fi
+  sudo_cmd rm -f "${in_progress}"
+  log "Cleared the in-progress deployment checkpoint"
+}
+
+backup_database() {
+  local volume_name="${COMPOSE_PROJECT_NAME}_pindou_data"
+  if ! sudo_cmd docker volume inspect "${volume_name}" >/dev/null 2>&1; then
+    log "No existing database volume; skipping backup"
+    return
+  fi
+
+  local mountpoint database_path backup_dir backup_path temporary_path
+  mountpoint="$(sudo_cmd docker volume inspect "${volume_name}" --format '{{ .Mountpoint }}')"
+  database_path="${mountpoint}/pindou.db"
+  if ! sudo_cmd test -f "${database_path}"; then
+    log "No existing SQLite database; skipping backup"
+    return
+  fi
+
+  backup_dir="${APP_DIR}/backups"
+  backup_path="${backup_dir}/pindou-$(date +'%Y%m%d-%H%M%S').db"
+  temporary_path="${backup_path}.partial"
+  sudo_cmd install -d -m 0700 "${backup_dir}"
+  sudo_cmd rm -f "${temporary_path}"
+  sudo_cmd python3 -c '
+import sqlite3, sys
+source, destination = sys.argv[1], sys.argv[2]
+with sqlite3.connect(source) as src, sqlite3.connect(destination) as dst:
+    src.backup(dst)
+with sqlite3.connect(destination) as check:
+    result = check.execute("PRAGMA integrity_check").fetchone()[0]
+if result != "ok":
+    raise SystemExit(f"backup integrity check failed: {result}")
+' "${database_path}" "${temporary_path}"
+  sudo_cmd chmod 0600 "${temporary_path}"
+  sudo_cmd mv "${temporary_path}" "${backup_path}"
+  persist_rollback_backup_once "${backup_path}"
+  log "Verified database backup: ${backup_path}"
+}
+
+rotate_secret_for_unified_accounts_once() {
+  local marker
+  marker="$(grep '^UNIFIED_ACCOUNT_SECRET_ROTATED=' "${ENV_FILE}" | cut -d= -f2- || true)"
+  if [[ "${marker}" == "true" ]]; then
+    log "Unified-account signing-key rotation already completed"
+    return
+  fi
+  set_env_value "SECRET_KEY" "$(openssl rand -hex 32)"
+  set_env_value "UNIFIED_ACCOUNT_SECRET_ROTATED" "true"
+  log "Rotated SECRET_KEY once for unified account migration"
 }
 
 configure_firewall() {
@@ -128,9 +282,31 @@ configure_firewall() {
 }
 
 deploy_stack() {
-  log "Building and starting PixelCraft containers"
+  log "Building and starting the private backend for migration and health verification"
   cd "${APP_DIR}"
+  compose build backend
+  BACKEND_REPLACEMENT_STARTED=true
+  compose up -d backend
+}
+
+verify_backend() {
+  log "Verifying the migrated backend while public writes remain blocked"
+  local attempt
+  for attempt in $(seq 1 30); do
+    if compose exec -T backend python3 -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=10).read()' >/dev/null 2>&1; then
+      log "Private backend health verification passed"
+      return
+    fi
+    sleep 2
+  done
+  compose logs --tail=120 backend || true
+  fail "Backend did not pass private health verification"
+}
+
+resume_public_stack() {
+  log "Backend is healthy; resuming the public PixelCraft stack"
   compose up --build -d
+  WRITES_QUIESCED=false
 }
 
 verify_stack() {
@@ -156,12 +332,24 @@ main() {
   require_project_files
   install_base_packages
   install_docker
+  begin_deployment_checkpoint
   ensure_env_file
+  trap 'recover_quiesced_services $?' ERR
+  trap 'recover_quiesced_services $?' EXIT
+  quiesce_writes
+  backup_database
+  rotate_secret_for_unified_accounts_once
   configure_firewall
   deploy_stack
+  verify_backend
+  resume_public_stack
   verify_stack
+  complete_deployment_checkpoint
+  trap - ERR EXIT
 
   log "Deployment complete. Open http://YOUR_DROPLET_IP:${PORT}"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

@@ -1,17 +1,20 @@
 import asyncio
 import json
+import os
+import tempfile
 import sys
-import types
 import unittest
 from pathlib import Path
 
 from fastapi import HTTPException
+from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
+os.environ.setdefault("APP_ENV", "test")
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
@@ -20,15 +23,166 @@ import schemas  # noqa: E402
 from database import Base  # noqa: E402
 from openai_grid import normalize_openai_grid  # noqa: E402
 
-auth_stub = types.ModuleType("auth")
-auth_stub.get_admin_user = lambda: None
-sys.modules.setdefault("auth", auth_stub)
-
 import routers.admin as admin_router  # noqa: E402
 from routers.admin import publish_pattern  # noqa: E402
 
 
 class OpenAIGridTests(unittest.TestCase):
+    def test_ready_grid_code_matrix_strips_numbered_headers(self):
+        raw_grid = [
+            ["", "1", "2", "3", "4"],
+            ["1", "", "H11", "H11", "1"],
+            ["2", "A23", "E16", "F21", "2"],
+            ["3", "", "E16", "F21", "3"],
+            ["", "1", "2", "3", "4"],
+        ]
+
+        trimmed = admin_router._trim_numbered_header_grid(raw_grid)
+
+        self.assertEqual(
+            trimmed,
+            [
+                ["", "H11", "H11"],
+                ["A23", "E16", "F21"],
+                ["", "E16", "F21"],
+            ],
+        )
+
+    def test_ready_grid_code_matrix_strips_blue_header_rows_when_numbers_ocr_poorly(self):
+        trimmed, colors = admin_router._trim_numbered_header_grid_and_colors(
+            [
+                ["1", "", "H11", ""],
+                ["2", "A23", "E16", "F21"],
+                ["", "", "", ""],
+            ],
+            [
+                ["#E5F1FF", "#FFFFFF", "#CDCDCD", "#FFFFFF"],
+                ["#E4F0FC", "#E1C9BD", "#FBF4EC", "#F2B8C6"],
+                ["#E5F1FF", "#E4F0FC", "#E5F0FD", "#E4EFFA"],
+            ],
+        )
+
+        self.assertEqual(trimmed, [["", "H11", ""], ["A23", "E16", "F21"]])
+        self.assertEqual(colors, [["#FFFFFF", "#CDCDCD", "#FFFFFF"], ["#E1C9BD", "#FBF4EC", "#F2B8C6"]])
+
+    def test_ready_grid_trim_preserves_numbered_dimensions_when_edge_rows_are_empty(self):
+        trimmed, colors = admin_router._trim_numbered_header_grid_and_colors(
+            [
+                ["", "1", "2"],
+                ["1", "A23", ""],
+                ["2", "", ""],
+                ["3", "", ""],
+                ["", "1", "2"],
+            ],
+            [
+                ["#E5F1FF", "#E5F1FF", "#E5F1FF"],
+                ["#E4F0FC", "#E1C9BD", "#FFFFFF"],
+                ["#E4F0FC", "#FFFFFF", "#FFFFFF"],
+                ["#E4F0FC", "#E5F1FF", "#E5F1FF"],
+                ["#E5F1FF", "#E5F1FF", "#E5F1FF"],
+            ],
+        )
+
+        self.assertEqual(trimmed, [["A23", ""], ["", ""], ["", ""]])
+        self.assertEqual(len(colors), 3)
+        self.assertEqual(len(colors[0]), 2)
+
+    def test_ready_grid_code_matrix_builds_processing_result(self):
+        result = admin_router._code_grid_to_processing_result(
+            [
+                ["", "H11", "H11"],
+                ["A23", "E16", "F21"],
+                ["", "E16", "F21"],
+            ],
+            [
+                ["#FFFFFF", "#C8C8C0", "#C8C8C0"],
+                ["#F5D7B8", "#FFF6EC", "#F4A6BE"],
+                ["#FFFFFF", "#FFF6EC", "#F4A6BE"],
+            ],
+            source_name="ready-grid.png",
+        )
+
+        self.assertEqual(result["rows"], 3)
+        self.assertEqual(result["cols"], 3)
+        self.assertEqual(result["image"], {"source_name": "ready-grid.png"})
+        self.assertEqual(
+            [(cell["row"], cell["col"], cell["symbol"], cell["empty"]) for cell in result["cells"]],
+            [
+                (1, 1, "", True),
+                (1, 2, "H11", False),
+                (1, 3, "H11", False),
+                (2, 1, "A23", False),
+                (2, 2, "E16", False),
+                (2, 3, "F21", False),
+                (3, 1, "", True),
+                (3, 2, "E16", False),
+                (3, 3, "F21", False),
+            ],
+        )
+        self.assertEqual(
+            result["legend"],
+            [
+                {"symbol": "H11", "color_hex": "#CDCDCD", "confidence": 1.0, "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0}},
+                {"symbol": "A23", "color_hex": "#E1C9BD", "confidence": 1.0, "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0}},
+                {"symbol": "E16", "color_hex": "#FBF4EC", "confidence": 1.0, "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0}},
+                {"symbol": "F21", "color_hex": "#F2B8C6", "confidence": 1.0, "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0}},
+            ],
+        )
+        self.assertEqual(result["artifacts"], {"source": "ready_grid_image_import"})
+
+    def test_ready_grid_legend_colors_override_cell_ocr_misreads(self):
+        assigned = admin_router._assign_ready_grid_codes_from_legend_colors(
+            [
+                ["E2", "", "F21"],
+                ["", "E1", ""],
+            ],
+            [
+                ["#F2B8C8", "#FFFFFF", "#F2B8C4"],
+                ["#FBF4EC", "#F2B8C7", "#FFFFFF"],
+            ],
+            [
+                {"symbol": "F21", "color_hex": "#F2B8C6"},
+                {"symbol": "E16", "color_hex": "#FBF4EC"},
+            ],
+        )
+
+        self.assertEqual(
+            assigned,
+            [
+                ["F21", "", "F21"],
+                ["E16", "F21", ""],
+            ],
+        )
+
+    def test_csv_upload_is_normalized_to_processing_result(self):
+        class FakeUpload:
+            content_type = "text/csv"
+            filename = "bead-pattern-3x2-MARD_20260502-091813.csv"
+
+            async def read(self):
+                return b"#F47A8A,TRANSPARENT,#6BB5E8\n#6BB5E8,#F47A8A,"
+
+        result = asyncio.run(
+            admin_router.upload_and_process(
+                file=FakeUpload(),
+                palette_name="MARD",
+                quality=85,
+                is_grid_image="false",
+                current_user=models.User(is_admin=True),
+            )
+        )
+
+        self.assertEqual(result["rows"], 2)
+        self.assertEqual(result["cols"], 3)
+        self.assertEqual(result["image"], {"source_name": "bead-pattern-3x2-MARD_20260502-091813.csv"})
+        self.assertEqual(
+            [(cell["row"], cell["col"], cell["empty"]) for cell in result["cells"]],
+            [(1, 1, False), (1, 2, True), (1, 3, False), (2, 1, False), (2, 2, False), (2, 3, True)],
+        )
+        self.assertTrue(all(cell["symbol"] == "" for cell in result["cells"] if cell["empty"]))
+        self.assertGreaterEqual(len(result["legend"]), 2)
+        self.assertEqual(result["palette_name"], "MARD")
+
     def test_normalize_openai_grid_builds_processing_result(self):
         raw_grid = {
             "rows": 2,
@@ -321,6 +475,39 @@ class OpenAIGridTests(unittest.TestCase):
         self.assertIn("no shadows", BEAD_IMAGE_ENHANCEMENT_PROMPT)
         self.assertIn("original reference image", OPENAI_GRID_PROMPT)
         self.assertIn("remove isolated noisy beads", OPENAI_GRID_PROMPT.lower())
+
+    def test_ai_input_image_is_resized_before_openai_upload(self):
+        from ai_enhancement import _prepare_openai_input_image
+
+        with tempfile.TemporaryDirectory() as workdir:
+            source = Path(workdir) / "large.png"
+            Image.new("RGB", (3200, 1800), "#F47A8A").save(source)
+            metadata = {}
+
+            prepared = Path(_prepare_openai_input_image(str(source), workdir, metadata, max_side=1024))
+
+            self.assertNotEqual(prepared, source)
+            with Image.open(prepared) as img:
+                self.assertLessEqual(max(img.size), 1024)
+                self.assertEqual(img.mode, "RGB")
+            self.assertTrue(metadata["input_image"]["resized"])
+            self.assertEqual(metadata["input_image"]["original_size"], [3200, 1800])
+
+    def test_ai_provider_errors_are_classified_for_admin_feedback(self):
+        from ai_enhancement import _provider_error_metadata
+
+        self.assertEqual(
+            _provider_error_metadata(Exception("Request timed out"))["error_type"],
+            "timeout",
+        )
+        self.assertEqual(
+            _provider_error_metadata(Exception("Error 429 rate limit exceeded"))["error_type"],
+            "rate_limited",
+        )
+        self.assertEqual(
+            _provider_error_metadata(Exception("invalid image: file size too large"))["error_type"],
+            "invalid_image",
+        )
 
     def test_signup_copy_does_not_explain_admin_email_rule(self):
         frontend_html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
