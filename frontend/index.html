@@ -3402,7 +3402,7 @@ function MembershipPage({ user, onLogout }) {
                   <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
                     <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Add Membership Capability</div>
                     <div style={{display:'grid',gap:8}}>
-                      <input value={promotionPhone} onChange={e=>setPromotionPhone(e.target.value)} placeholder="Unique phone" type="tel" style={inputStyle}/>
+                      <input value={promotionPhone} onChange={e=>setPromotionPhone(e.target.value)} placeholder="+61 412 345 678" type="tel" style={inputStyle}/>
                       <button onClick={promoteMembership} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Promote to Member</button>
                     </div>
                   </div>
@@ -3411,7 +3411,7 @@ function MembershipPage({ user, onLogout }) {
                     <div style={{display:'grid',gap:8}}>
                       <input value={editForm.email} onChange={e=>setEditForm(prev=>({...prev,email:e.target.value}))} placeholder="Email" type="email" style={inputStyle}/>
                       <input value={editForm.name} onChange={e=>setEditForm(prev=>({...prev,name:e.target.value}))} placeholder="Name" style={inputStyle}/>
-                      <input value={editForm.phone} onChange={e=>setEditForm(prev=>({...prev,phone:e.target.value}))} placeholder="Phone" type="tel" style={inputStyle}/>
+                      <input value={editForm.phone} onChange={e=>setEditForm(prev=>({...prev,phone:e.target.value}))} placeholder="+61 412 345 678" type="tel" style={inputStyle}/>
                       <input value={editForm.password} onChange={e=>setEditForm(prev=>({...prev,password:e.target.value}))} placeholder="New password (optional)" type="password" style={inputStyle}/>
                       <textarea value={editForm.notes} onChange={e=>setEditForm(prev=>({...prev,notes:e.target.value}))} placeholder="Staff notes" rows="2" style={{...inputStyle,resize:'vertical'}}/>
                       <label style={{display:'flex',alignItems:'center',gap:8,fontSize:12,fontWeight:800,color:'#555'}}>
@@ -3799,7 +3799,7 @@ function LoginModal({ onClose, onLogin }) {
         ] : [
           {id:'register-email',label:'Email',type:'email',key:'email',placeholder:'you@example.com',autoComplete:'email'},
           {id:'register-name',label:'Name',type:'text',key:'name',placeholder:'Your name',autoComplete:'name'},
-          {id:'register-phone',label:'Phone',type:'tel',key:'phone',placeholder:'+60 12-345 6789',autoComplete:'tel'},
+          {id:'register-phone',label:'Phone',type:'tel',key:'phone',placeholder:'+61 412 345 678',autoComplete:'tel'},
           {id:'register-password',label:'Password',type:'password',key:'password',placeholder:'Password',autoComplete:'new-password'},
           {id:'register-password-confirmation',label:'Confirm password',type:'password',key:'passwordConfirmation',placeholder:'Confirm password',autoComplete:'new-password'},
         ]).map((f,index)=>(
