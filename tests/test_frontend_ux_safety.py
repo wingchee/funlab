@@ -157,3 +157,11 @@ def test_membership_staff_header_places_refresh_before_mode_switcher():
     assert staff_header.index("onClick={() => search('')}") < staff_header.index(
         "['staff', 'Staff Dashboard']"
     )
+
+
+def test_dedicated_phone_inputs_use_an_australian_example():
+    html = read_frontend()
+
+    assert html.count('placeholder="+61 412 345 678" type="tel"') == 2
+    assert "{id:'register-phone',label:'Phone',type:'tel',key:'phone',placeholder:'+61 412 345 678'" in html
+    assert 'placeholder="+60 12-345 6789"' not in html
