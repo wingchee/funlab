@@ -160,6 +160,31 @@ class MembershipTests(unittest.TestCase):
             ],
         )
 
+    def test_admin_member_detail_exposes_existing_balance_token_without_public_leakage(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+        )
+        db.add(admin)
+        member = self._member(
+            db,
+            name="Existing Member",
+            phone="60123456782",
+            balance_access_token="existing-member-balance-token",
+        )
+
+        detail = memberships.admin_get_member(member.id, _=admin, db=db)
+        public = memberships.public_member_balance(member.balance_access_token, db=db)
+        search = memberships.admin_search_members(q=member.member_code, _=admin, db=db)
+
+        self.assertEqual(detail["balance_access_token"], member.balance_access_token)
+        self.assertNotIn("balance_access_token", public)
+        self.assertNotIn("balance_access_token", search[0])
+
     def test_public_balance_rejects_inactive_member_and_replaced_token(self):
         db = self._session()
         memberships = self._memberships()

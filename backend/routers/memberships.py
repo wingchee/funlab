@@ -486,6 +486,7 @@ def admin_get_member(
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
     payload = serialize_member(member)
+    payload["balance_access_token"] = member.balance_access_token
     payload["packages"] = [serialize_package(package) for package in member.packages]
     payload["visits"] = [
         serialize_visit(visit)
