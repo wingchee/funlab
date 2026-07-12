@@ -8,6 +8,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
@@ -50,7 +52,14 @@ class MigrationTests(unittest.TestCase):
                 self.assertNotIn("members", tables)
                 self.assertTrue({"member_packages", "member_visits"}.issubset(tables))
                 user_columns = _columns(connection, "users")
-                for name in ("member_code", "phone", "is_active", "notes", "updated_at"):
+                for name in (
+                    "member_code",
+                    "balance_access_token",
+                    "phone",
+                    "is_active",
+                    "notes",
+                    "updated_at",
+                ):
                     self.assertIn(name, user_columns)
                 self.assertEqual(user_columns["member_code"][3], 0)
                 self.assertEqual(user_columns["phone"][3], 0)
@@ -69,8 +78,42 @@ class MigrationTests(unittest.TestCase):
                 self.assertNotIn("member_id", _columns(connection, "favorites"))
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                    "20260711_0003",
+                    "20260712_0004",
                 )
+
+    def test_upgrade_backfills_unique_balance_tokens_for_members_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "balance-tokens.db"
+            prepared = self._upgrade(database_path, "20260711_0003")
+            self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+            with sqlite3.connect(database_path) as connection:
+                connection.executemany(
+                    "INSERT INTO users "
+                    "(id, email, password_hash, name, is_admin, member_code, phone) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        (1, "member@example.com", "hash", "Member", 0, "FL00000001", "60123456789"),
+                        (2, "user@example.com", "hash", "User", 0, None, None),
+                    ],
+                )
+
+            result = self._upgrade(database_path)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            with sqlite3.connect(database_path) as connection:
+                member_token = connection.execute(
+                    "SELECT balance_access_token FROM users WHERE id=1"
+                ).fetchone()[0]
+                non_member_token = connection.execute(
+                    "SELECT balance_access_token FROM users WHERE id=2"
+                ).fetchone()[0]
+
+                self.assertIsInstance(member_token, str)
+                self.assertGreaterEqual(len(member_token), 32)
+                self.assertIsNone(non_member_token)
+                with pytest.raises(sqlite3.IntegrityError):
+                    connection.execute(
+                        "UPDATE users SET balance_access_token=? WHERE id=2", (member_token,)
+                    )
 
     def test_upgrade_preserves_production_users_and_user_favorites(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -416,7 +459,7 @@ class MigrationTests(unittest.TestCase):
             with sqlite3.connect(database_path) as connection:
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                    "20260711_0003",
+                    "20260712_0004",
                 )
                 self.assertFalse(
                     connection.execute(

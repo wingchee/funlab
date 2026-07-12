@@ -11,6 +11,7 @@ class User(Base):
     name = Column(String, nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
     member_code = Column(String, unique=True, nullable=True, index=True)
+    balance_access_token = Column(String, unique=True, nullable=True, index=True)
     phone = Column(String, unique=True, nullable=True, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     notes = Column(Text, nullable=False, default="")

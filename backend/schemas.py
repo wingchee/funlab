@@ -36,8 +36,6 @@ class TableMemberAttachRequest(BaseModel):
 class MemberCreate(BaseModel):
     name: str
     phone: str
-    password: str = ""
-    notes: str = ""
 
 
 class MemberRegistration(BaseModel):
