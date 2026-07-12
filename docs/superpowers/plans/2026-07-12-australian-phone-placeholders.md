@@ -35,7 +35,8 @@ Add this test to `tests/test_frontend_ux_safety.py`:
 def test_dedicated_phone_inputs_use_an_australian_example():
     html = read_frontend()
 
-    assert html.count('placeholder="+61 412 345 678" type="tel"') == 3
+    assert html.count('placeholder="+61 412 345 678" type="tel"') == 2
+    assert "{id:'register-phone',label:'Phone',type:'tel',key:'phone',placeholder:'+61 412 345 678'" in html
     assert 'placeholder="+60 12-345 6789"' not in html
 ```
 
@@ -43,17 +44,17 @@ def test_dedicated_phone_inputs_use_an_australian_example():
 
 Run: `python3 -m pytest tests/test_frontend_ux_safety.py::test_dedicated_phone_inputs_use_an_australian_example -v`
 
-Expected: FAIL because the current registration placeholder uses a Malaysian example and the two staff fields use generic text.
+Expected: FAIL because the current registration field definition uses a Malaysian example and the two staff fields use generic text.
 
 - [ ] **Step 3: Write the minimal implementation**
 
-Replace only these three placeholder attributes in `frontend/index.html`:
+Replace the two direct staff placeholder attributes in `frontend/index.html` with:
 
 ```jsx
 placeholder="+61 412 345 678" type="tel"
 ```
 
-Apply the replacement to the existing promotion, staff-edit, and registration phone inputs. Do not change any other attribute or JSX expression.
+Apply that replacement to the existing promotion and staff-edit inputs. In the existing registration field definition, replace only `placeholder:'+60 12-345 6789'` with `placeholder:'+61 412 345 678'`. Do not change any other attribute or JSX expression.
 
 - [ ] **Step 4: Run focused and regression checks**
 
