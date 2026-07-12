@@ -64,22 +64,20 @@ def test_clickable_cards_and_upload_controls_are_keyboard_accessible():
     assert 'aria-label="Remove selected upload"' in html
 
 
-def test_member_sign_in_dialog_supports_complete_registration():
+def test_member_sign_in_dialog_is_sign_in_only():
     html = read_frontend()
 
     assert "function LoginModal({ onClose, onLogin })" in html
-    assert "const [mode, setMode] = useState('login')" in html
-    assert "passwordConfirmation" in html
-    assert "Confirm password" in html
-    assert "Passwords do not match" in html
-    assert "Create Membership" in html
+    assert "apiFetch('/auth/register'" not in html
+    assert "Create Membership" not in html
+    assert "sign in or create an account" not in html.lower()
 
 
 def test_site_uses_one_account_auth_surface_and_browser_session():
     html = read_frontend()
 
     assert "apiFetch('/auth/login'" in html
-    assert "apiFetch('/auth/register'" in html
+    assert "apiFetch('/auth/register'" not in html
     assert "'/members/login'" not in html
     assert "'/members/register'" not in html
     assert "pc_member_token" not in html
@@ -89,6 +87,22 @@ def test_site_uses_one_account_auth_surface_and_browser_session():
     assert "localStorage.setItem('pc_user', JSON.stringify(account))" in html
     assert "member_code" in html
     assert "Membership profile required" in html
+
+
+def test_staff_can_create_members_and_manage_public_balance_links():
+    html = read_frontend()
+
+    assert "function AddMemberPage" in html
+    assert "apiFetch('/members'" in html
+    assert "balance-qr?origin=" in html
+
+
+def test_public_member_balance_route_uses_an_unauthenticated_token_lookup():
+    html = read_frontend()
+
+    assert "function PublicMemberBalancePage" in html
+    assert "apiFetch(`/members/public/${token}`)" in html
+    assert "window.location.pathname.startsWith('/member/')" in html
 
 
 def test_logout_and_membership_portal_share_the_global_account():
@@ -162,6 +176,6 @@ def test_membership_staff_header_places_refresh_before_mode_switcher():
 def test_dedicated_phone_inputs_use_an_australian_example():
     html = read_frontend()
 
-    assert html.count('placeholder="+61 412 345 678" type="tel"') == 2
-    assert "{id:'register-phone',label:'Phone',type:'tel',key:'phone',placeholder:'+61 412 345 678'" in html
+    assert html.count('placeholder="+61 412 345 678" type="tel"') == 3
+    assert 'id="new-member-phone"' in html
     assert 'placeholder="+60 12-345 6789"' not in html

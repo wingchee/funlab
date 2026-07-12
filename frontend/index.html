@@ -668,7 +668,7 @@ const API_BASE = '/api';
 async function apiFetch(path, options = {}) {
   const token = localStorage.getItem('pc_token');
   const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token && !path.startsWith('/members/public/')) headers['Authorization'] = `Bearer ${token}`;
   if (options.body && typeof options.body === 'string') {
     headers['Content-Type'] = 'application/json';
   }
@@ -3005,6 +3005,68 @@ function AdminPage({ onPatternPublished }) {
   );
 }
 
+function AddMemberPage({ onCreated, onCancel }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const inputStyle = {
+    width:'100%',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 12px',
+    fontSize:13,fontFamily:'inherit',outline:'none',background:'#fff'
+  };
+
+  const submit = async event => {
+    event.preventDefault();
+    if (!name.trim() || !phone.trim()) {
+      setError('Name and phone are required.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await apiFetch('/members', {
+        method:'POST',
+        body:JSON.stringify({ name: name.trim(), phone: phone.trim() }),
+      });
+      if (!res?.ok) {
+        try { setError((await res?.json())?.detail || 'Unable to create member.'); } catch (_) { setError('Unable to create member.'); }
+        return;
+      }
+      onCreated(await res.json());
+    } catch (_) {
+      setError('Unable to create member.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="page-shell pixel-bg">
+      <div className="page-inner" style={{maxWidth:700}}>
+        <div className="page-header" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:18,flexWrap:'wrap'}}>
+          <div>
+            <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'0',marginBottom:8}}>Add Member</h1>
+            <p style={{color:'#888',fontSize:15}}>Create a member record with the details needed for check-ins and balance access.</p>
+          </div>
+          <button type="button" onClick={onCancel} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Back to dashboard</button>
+        </div>
+        <form onSubmit={submit} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22,display:'grid',gap:14}}>
+          <div>
+            <label htmlFor="new-member-name" style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Name</label>
+            <input id="new-member-name" value={name} onChange={event=>setName(event.target.value)} autoComplete="name" style={inputStyle}/>
+          </div>
+          <div>
+            <label htmlFor="new-member-phone" style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Phone</label>
+            <input id="new-member-phone" value={phone} onChange={event=>setPhone(event.target.value)} placeholder="+61 412 345 678" type="tel" autoComplete="tel" style={inputStyle}/>
+          </div>
+          {error && <div role="status" style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#991B1B'}}>{error}</div>}
+          <button type="submit" disabled={loading} style={{background:loading?'#E8E6E1':T.accentRed,color:loading?'#888':'#fff',border:'none',borderRadius:8,padding:'11px 14px',fontWeight:800,fontFamily:'inherit',cursor:loading?'default':'pointer'}}>{loading ? 'Creating…' : 'Create Member'}</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── MEMBERSHIP DASHBOARD ─────────────────────────────────────────────────────
 function MembershipPage({ user, onLogout }) {
   const isAdmin = !!user?.is_admin;
@@ -3023,8 +3085,10 @@ function MembershipPage({ user, onLogout }) {
   const [promotionPhone, setPromotionPhone] = useState('');
   const [checkInTable, setCheckInTable] = useState('1');
   const [manualMemberCode, setManualMemberCode] = useState('');
+  const [staffView, setStaffView] = useState('dashboard');
   const videoRef = useRef(null);
   const scanCanvasRef = useRef(null);
+  const balanceQrUrlRef = useRef('');
 
   useEffect(() => {
     if (!isAdmin) setMembershipMode('member');
@@ -3049,6 +3113,15 @@ function MembershipPage({ user, onLogout }) {
       setSelected(member);
     }
   }, []);
+
+  const replaceBalanceQrUrl = useCallback(nextUrl => {
+    if (balanceQrUrlRef.current && balanceQrUrlRef.current !== nextUrl) {
+      URL.revokeObjectURL(balanceQrUrlRef.current);
+    }
+    balanceQrUrlRef.current = nextUrl;
+  }, []);
+
+  useEffect(() => () => replaceBalanceQrUrl(''), [replaceBalanceQrUrl]);
 
   const search = useCallback(async (term = '') => {
     if (!isAdmin) return;
@@ -3167,6 +3240,65 @@ function MembershipPage({ user, onLogout }) {
     setMembers(prev => prev.map(account => account.id === updated.id ? {...account,...updated} : account));
     setSelected(prev => ({...prev,...updated,packages:[],visits:[]}));
     setMessage('Membership capability removed. The account and administrator access remain active.');
+  };
+
+  const createMember = created => {
+    setMembers(prev => [created, ...prev.filter(member => member.id !== created.id)]);
+    setSelected(created);
+    setStaffView('dashboard');
+    setMessage('Member created. Their balance link is ready to share.');
+  };
+
+  const copyBalanceLink = async () => {
+    const balanceLink = selected?.balance_access_token
+      ? window.location.origin + '/member/' + selected.balance_access_token
+      : '';
+    if (!balanceLink) {
+      setMessage('Regenerate the balance link before copying it.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(balanceLink);
+      setMessage('Balance link copied.');
+    } catch (_) {
+      setMessage('Unable to copy the balance link.');
+    }
+  };
+
+  const downloadBalanceQr = async () => {
+    if (!selected?.id || !selected?.balance_access_token) {
+      setMessage('Regenerate the balance link before downloading its QR code.');
+      return;
+    }
+    const res = await apiFetch(`/members/${selected.id}/balance-qr?origin=${encodeURIComponent(window.location.origin)}`);
+    if (!res?.ok) {
+      setMessage('Unable to create the balance QR code.');
+      return;
+    }
+    const nextUrl = URL.createObjectURL(await res.blob());
+    replaceBalanceQrUrl(nextUrl);
+    const download = document.createElement('a');
+    download.href = nextUrl;
+    download.download = `${selected.member_code || 'member'}-balance-qr.png`;
+    document.body.appendChild(download);
+    download.click();
+    download.remove();
+    setMessage('Balance QR download started.');
+  };
+
+  const regenerateBalanceLink = async () => {
+    if (!selected?.id || !window.confirm('Regenerate this private balance link? The previous link will stop working.')) return;
+    const res = await apiFetch(`/members/${selected.id}/balance-link/regenerate`, { method:'POST' });
+    if (!res?.ok) {
+      setMessage('Unable to regenerate the balance link.');
+      return;
+    }
+    const link = await res.json();
+    const updated = { ...selected, ...link };
+    replaceBalanceQrUrl('');
+    setSelected(updated);
+    setMembers(prev => prev.map(member => member.id === updated.id ? { ...member, ...updated } : member));
+    setMessage('Balance link regenerated. The previous link no longer works.');
   };
 
   const addPackage = async () => {
@@ -3310,6 +3442,10 @@ function MembershipPage({ user, onLogout }) {
     );
   }
 
+  if (staffView === 'add-member') {
+    return <AddMemberPage onCreated={createMember} onCancel={() => setStaffView('dashboard')}/>;
+  }
+
   return (
     <div className="page-shell pixel-bg">
       <div className="page-inner">
@@ -3319,6 +3455,7 @@ function MembershipPage({ user, onLogout }) {
             <p style={{color:'#888',fontSize:15}}>Search members, scan QR codes, add packages, and check members into tables.</p>
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <button onClick={() => setStaffView('add-member')} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Add Member</button>
             <button onClick={() => search('')} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
               {loading ? 'Loading' : 'Refresh'}
             </button>
@@ -3398,6 +3535,15 @@ function MembershipPage({ user, onLogout }) {
                 </div>
 
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))',gap:14,marginBottom:18}}>
+                  {selected.member_code && <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
+                    <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Public Balance Link</div>
+                    <input readOnly value={selected.balance_access_token ? window.location.origin + '/member/' + selected.balance_access_token : ''} placeholder="Regenerate to create a balance link" style={{...inputStyle,marginBottom:8,fontFamily:'Space Mono,monospace',fontSize:11}}/>
+                    <div style={{display:'grid',gap:8}}>
+                      <button onClick={copyBalanceLink} disabled={!selected.balance_access_token} style={{background:selected.balance_access_token?'#1A1A18':'#E8E6E1',color:selected.balance_access_token?'#fff':'#888',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:selected.balance_access_token?'pointer':'default'}}>Copy Link</button>
+                      <button onClick={downloadBalanceQr} disabled={!selected.balance_access_token} style={{background:selected.balance_access_token?T.accentOrange:'#E8E6E1',color:selected.balance_access_token?'#fff':'#888',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:selected.balance_access_token?'pointer':'default'}}>Download QR</button>
+                      <button onClick={regenerateBalanceLink} style={{background:'#fff',color:'#B45309',border:'1px solid #F2C47F',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Regenerate Link</button>
+                    </div>
+                  </div>}
                   {!selected.member_code ? (
                   <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
                     <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Add Membership Capability</div>
@@ -3585,7 +3731,7 @@ function MemberPortalPage({ user, embedded = false, onLogout } = {}) {
       return (
         <section style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22}}>
           <h2 style={{fontSize:22,fontWeight:800,marginBottom:10}}>Sign in to view Membership</h2>
-          <p style={{color:'#777',lineHeight:1.7}}>Use the Member Sign In button in the site header to sign in or create an account.</p>
+          <p style={{color:'#777',lineHeight:1.7}}>Use the Member Sign In button in the site header to sign in to your existing account.</p>
         </section>
       );
     }
@@ -3679,10 +3825,71 @@ function MemberPortalPage({ user, embedded = false, onLogout } = {}) {
   );
 }
 
+function PublicMemberBalancePage({ token }) {
+  const [member, setMember] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const loadBalance = async () => {
+      const res = await apiFetch(`/members/public/${token}`);
+      if (!active) return;
+      if (!res?.ok) {
+        setMember(null);
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      if (!active) return;
+      setMember(data);
+      setLoading(false);
+    };
+    loadBalance().catch(() => {
+      if (!active) return;
+      setMember(null);
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [token]);
+
+  return (
+    <div className="page-shell pixel-bg" style={{minHeight:'100vh',display:'flex',alignItems:'center'}}>
+      <main className="page-inner" style={{maxWidth:680,width:'100%'}}>
+        {loading ? (
+          <section role="status" style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:12,padding:28,textAlign:'center'}}><Spinner size={20}/> Loading balance…</section>
+        ) : !member ? (
+          <section role="status" style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:12,padding:28,textAlign:'center'}}>
+            <h1 style={{fontSize:24,fontWeight:800,marginBottom:8}}>Balance link unavailable</h1>
+            <p style={{color:'#777'}}>This balance link is unavailable.</p>
+          </section>
+        ) : (
+          <section style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:12,padding:28}}>
+            <h1 style={{fontSize:30,fontWeight:800,marginBottom:6}}>{member.name}</h1>
+            <div style={{fontFamily:'Space Mono,monospace',fontSize:13,fontWeight:700,color:'#666',marginBottom:20}}>Member ID: {member.member_code}</div>
+            <div style={{background:`${T.accentRed}12`,border:`1px solid ${T.accentRed}30`,borderRadius:8,padding:16,marginBottom:22}}>
+              <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#B95B6B',fontWeight:800,marginBottom:5}}>Remaining Hours</div>
+              <div style={{fontFamily:'Space Mono,monospace',fontSize:30,fontWeight:800,color:T.accentRed}}>{formatHours(member.remaining_seconds)}</div>
+            </div>
+            <h2 style={{fontSize:18,fontWeight:800,marginBottom:12}}>Packages</h2>
+            <div style={{display:'grid',gap:8}}>
+              {(member.packages || []).length === 0 && <div style={{fontSize:13,color:'#999'}}>No packages yet.</div>}
+              {(member.packages || []).map((pkg, index) => (
+                <div key={`${pkg.package_name}-${index}`} style={{display:'flex',justifyContent:'space-between',gap:14,borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                  <div style={{fontWeight:800}}>{pkg.package_name}</div>
+                  <div style={{fontFamily:'Space Mono,monospace',fontWeight:800,color:T.accentRed}}>{formatHours(pkg.remaining_seconds)}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
+
 // ─── LOGIN MODAL ──────────────────────────────────────────────────────────────
 function LoginModal({ onClose, onLogin }) {
-  const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ identifier:'', email:'', name:'', phone:'', password:'', passwordConfirmation:'' });
+  const [form, setForm] = useState({ identifier:'', password:'' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const firstInputRef = useRef(null);
@@ -3696,57 +3903,18 @@ function LoginModal({ onClose, onLogin }) {
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [onClose]);
 
-  useEffect(() => {
-    setError('');
-    window.setTimeout(() => firstInputRef.current?.focus(), 0);
-  }, [mode]);
-
   const readError = async (res, fallback) => {
     try { return (await res.json())?.detail || fallback; } catch (_) { return fallback; }
   };
 
   const submit = async () => {
-    if (mode === 'register') {
-      if (!form.email.trim() || !form.name.trim() || !form.phone.trim() || !form.password || !form.passwordConfirmation) {
-        setError('Please fill in all fields');
-        return;
-      }
-      if (form.password !== form.passwordConfirmation) {
-        setError('Passwords do not match');
-        return;
-      }
-    } else if (!form.identifier.trim() || !form.password) {
+    if (!form.identifier.trim() || !form.password) {
       setError('Please fill in all fields');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      if (mode === 'register') {
-        const res = await apiFetch('/auth/register', {
-          method:'POST',
-          body:JSON.stringify({
-            email:form.email,
-            name:form.name,
-            phone:form.phone,
-            password:form.password,
-            password_confirmation:form.passwordConfirmation,
-          }),
-        });
-        if (!res) {
-          setError('Cannot reach the server. Please try again.');
-          return;
-        }
-        if (!res.ok) {
-          setError(await readError(res, 'Unable to register member.'));
-          return;
-        }
-        const data = await res.json();
-        onLogin(data.user, data.access_token);
-        onClose();
-        return;
-      }
-
       const res = await apiFetch('/auth/login', {
         method:'POST',
         body:JSON.stringify({ identifier:form.identifier, password:form.password }),
@@ -3784,25 +3952,13 @@ function LoginModal({ onClose, onLogin }) {
           </div>
           <span style={{fontWeight:800,fontSize:18}}><span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span></span>
         </div>
-        <h2 id="login-title" style={{fontSize:22,fontWeight:800,textAlign:'center',marginBottom:6}}>{mode === 'login' ? 'Welcome back' : 'Join FunLab'}</h2>
-        <p style={{color:'#777',fontSize:13,textAlign:'center',marginBottom:18}}>{mode === 'login' ? 'Sign in to your member account.' : 'Create one account for the site and Membership.'}</p>
+        <h2 id="login-title" style={{fontSize:22,fontWeight:800,textAlign:'center',marginBottom:6}}>Welcome back</h2>
+        <p style={{color:'#777',fontSize:13,textAlign:'center',marginBottom:18}}>Sign in to your account.</p>
 
-        <div style={{display:'flex',gap:8,background:'#f5f3f1',borderRadius:8,padding:4,marginBottom:20}}>
-          {[['login','Sign In'],['register','Register']].map(([id,label]) => (
-            <button key={id} type="button" onClick={()=>setMode(id)} style={{flex:1,border:'none',borderRadius:6,padding:'9px 0',background:mode===id?'#fff':'transparent',color:mode===id?T.accentRed:'#666',boxShadow:mode===id?'0 2px 8px rgba(26,26,24,0.08)':'none',fontFamily:'inherit',fontWeight:800,cursor:'pointer'}}>{label}</button>
-          ))}
-        </div>
-
-        {(mode === 'login' ? [
+        {[
           {id:'login-identifier',label:'Email, phone, or Member ID',type:'text',key:'identifier',placeholder:'you@example.com or FL00000000',autoComplete:'username'},
           {id:'login-password',label:'Password',type:'password',key:'password',placeholder:'Password',autoComplete:'current-password'},
-        ] : [
-          {id:'register-email',label:'Email',type:'email',key:'email',placeholder:'you@example.com',autoComplete:'email'},
-          {id:'register-name',label:'Name',type:'text',key:'name',placeholder:'Your name',autoComplete:'name'},
-          {id:'register-phone',label:'Phone',type:'tel',key:'phone',placeholder:'+61 412 345 678',autoComplete:'tel'},
-          {id:'register-password',label:'Password',type:'password',key:'password',placeholder:'Password',autoComplete:'new-password'},
-          {id:'register-password-confirmation',label:'Confirm password',type:'password',key:'passwordConfirmation',placeholder:'Confirm password',autoComplete:'new-password'},
-        ]).map((f,index)=>(
+        ].map((f,index)=>(
           <div key={f.label} style={{marginBottom:14}}>
             <label htmlFor={f.id} style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>{f.label}</label>
             <input id={f.id} ref={index === 0 ? firstInputRef : undefined} type={f.type} value={form[f.key]} onChange={e=>setForm(prev=>({...prev,[f.key]:e.target.value}))} placeholder={f.placeholder} autoComplete={f.autoComplete}
@@ -3822,7 +3978,7 @@ function LoginModal({ onClose, onLogin }) {
           fontWeight:700,fontSize:14,cursor:loading?'default':'pointer',fontFamily:'inherit',transition:'all 0.2s',
           display:'flex',alignItems:'center',justifyContent:'center',gap:8
         }}>
-          {loading ? <><Spinner size={14}/> {mode === 'login' ? 'Signing in...' : 'Creating account...'}</> : mode === 'login' ? 'Sign In' : 'Create Membership'}
+          {loading ? <><Spinner size={14}/> Signing in...</> : 'Sign In'}
         </button>
 
       </div>
@@ -4047,7 +4203,13 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+const isPublicMemberBalanceRoute = window.location.pathname.startsWith('/member/');
+const publicMemberBalanceToken = window.location.pathname.split('/').filter(Boolean).pop();
+ReactDOM.createRoot(document.getElementById('root')).render(
+  isPublicMemberBalanceRoute
+    ? <PublicMemberBalancePage token={publicMemberBalanceToken}/>
+    : <App/>
+);
 </script>
 </body>
 </html>
