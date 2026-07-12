@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -16,7 +17,15 @@ if str(BACKEND) not in sys.path:
 
 import models  # noqa: E402
 import schemas  # noqa: E402
-from auth import get_admin_user, get_membership_user, hash_password, verify_password  # noqa: E402
+from auth import (  # noqa: E402
+    create_token,
+    get_admin_user,
+    get_current_user,
+    get_membership_user,
+    hash_password,
+    verify_password,
+)
+from routers import favorites  # noqa: E402
 from routers import auth as auth_router  # noqa: E402
 
 
@@ -191,3 +200,66 @@ def test_membership_and_admin_dependencies_accept_unified_roles(db):
     )
     assert get_membership_user(membership_admin) is membership_admin
     assert get_admin_user(membership_admin) is membership_admin
+
+
+def test_real_token_is_rejected_everywhere_after_account_deactivation(db):
+    user = _member(db, is_admin=True)
+    credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer", credentials=create_token(user.id)
+    )
+    user.is_active = False
+    db.commit()
+
+    authenticated_entry_points = (
+        lambda: auth_router.me(get_current_user(credentials, db)),
+        lambda: favorites.list_favorite_ids(get_current_user(credentials, db), db),
+        lambda: get_admin_user(get_current_user(credentials, db)),
+    )
+    for invoke in authenticated_entry_points:
+        with pytest.raises(HTTPException) as error:
+            invoke()
+        assert error.value.status_code == 401
+        assert error.value.detail == "Invalid or expired token"
+
+
+def _account(db, *, email, password, phone=None, member_code=None):
+    account = models.User(
+        email=email,
+        password_hash=hash_password(password),
+        name=email,
+        is_admin=False,
+        phone=phone,
+        member_code=member_code,
+        is_active=True,
+        notes="",
+    )
+    db.add(account)
+    db.commit()
+    return account
+
+
+def test_login_email_namespace_wins_over_phone_and_member_id(db):
+    identifier = "60128889999"
+    _account(db, email="phone@example.com", password="phone-pass", phone=identifier)
+    _account(db, email="code@example.com", password="code-pass", member_code=identifier)
+    email_owner = _account(db, email=identifier, password="email-pass")
+
+    result = auth_router.login(
+        schemas.AccountLogin(identifier=identifier, password="email-pass"), db=db
+    )
+
+    assert result["user"]["id"] == email_owner.id
+
+
+def test_login_phone_namespace_wins_over_member_id(db):
+    identifier = "60127778888"
+    _account(db, email="code@example.com", password="code-pass", member_code=identifier)
+    phone_owner = _account(
+        db, email="phone@example.com", password="phone-pass", phone=identifier
+    )
+
+    result = auth_router.login(
+        schemas.AccountLogin(identifier=identifier, password="phone-pass"), db=db
+    )
+
+    assert result["user"]["id"] == phone_owner.id

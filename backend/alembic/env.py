@@ -4,7 +4,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from database import Base
+from database import Base, configure_sqlite_foreign_keys
 import models  # noqa: F401
 
 
@@ -39,7 +39,14 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    configure_sqlite_foreign_keys(connectable)
     with connectable.connect() as connection:
+        sqlite_batch_mode = connection.dialect.name == "sqlite"
+        if sqlite_batch_mode:
+            if connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() != 1:
+                raise RuntimeError("SQLite foreign key enforcement was not enabled")
+            connection.commit()
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
@@ -48,6 +55,14 @@ def run_migrations_online() -> None:
         )
         with context.begin_transaction():
             context.run_migrations()
+        if sqlite_batch_mode:
+            connection.commit()
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            violations = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                raise RuntimeError(
+                    f"Foreign key violations after Alembic migrations: {violations}"
+                )
 
 
 if context.is_offline_mode():

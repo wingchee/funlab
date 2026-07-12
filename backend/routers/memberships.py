@@ -1,4 +1,6 @@
 import io
+import re
+import secrets
 from datetime import datetime
 from typing import Optional
 
@@ -89,7 +91,6 @@ def search_members(db: Session, query: str, limit: int = 25) -> list[models.User
     return (
         db.query(models.User)
         .filter(
-            models.User.member_code.is_not(None),
             or_(
                 models.User.name.ilike(like),
                 models.User.email.ilike(like),
@@ -101,6 +102,34 @@ def search_members(db: Session, query: str, limit: int = 25) -> list[models.User
         .limit(limit)
         .all()
     )
+
+
+def _generate_member_code(db: Session) -> str:
+    for _ in range(20):
+        code = f"FL{secrets.randbelow(100_000_000):08d}"
+        if not db.query(models.User.id).filter(models.User.member_code == code).first():
+            return code
+    raise HTTPException(status_code=500, detail="Unable to generate unique Member ID")
+
+
+def _membership_removal_conflicts(db: Session, user_id: int) -> list[str]:
+    checks = (
+        (models.MemberPackage, "packages"),
+        (models.MemberVisit, "visits"),
+        (models.TableTimer, "active table assignments"),
+        (models.TableTimeLog, "time logs"),
+    )
+    filters = (
+        models.MemberPackage.member_id == user_id,
+        models.MemberVisit.member_id == user_id,
+        models.TableTimer.active_member_id == user_id,
+        models.TableTimeLog.member_id == user_id,
+    )
+    return [
+        label
+        for (model, label), criterion in zip(checks, filters)
+        if db.query(model).filter(criterion).first() is not None
+    ]
 
 
 def add_package_record(
@@ -295,10 +324,7 @@ def admin_get_member(
     _: models.User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    member = db.query(models.User).filter(
-        models.User.id == member_id,
-        models.User.member_code.is_not(None),
-    ).first()
+    member = db.query(models.User).filter(models.User.id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
     payload = serialize_member(member)
@@ -308,6 +334,82 @@ def admin_get_member(
         for visit in sorted(member.visits, key=lambda row: row.checked_out_at, reverse=True)
     ]
     return payload
+
+
+@router.post("/{member_id}/membership")
+def admin_promote_membership(
+    member_id: int,
+    body: schemas.MembershipPromotion,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    account = db.query(models.User).filter(models.User.id == member_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account.member_code:
+        raise HTTPException(status_code=409, detail="Account already has membership capability")
+
+    phone = normalize_phone(body.phone)
+    if not phone:
+        raise HTTPException(status_code=400, detail="A valid phone is required")
+    if db.query(models.User.id).filter(
+        models.User.phone == phone, models.User.id != account.id
+    ).first():
+        raise HTTPException(status_code=409, detail="Phone is already used by another account")
+
+    member_code = (body.member_code or "").strip().upper()
+    if member_code and not re.fullmatch(r"FL\d{8}", member_code):
+        raise HTTPException(status_code=400, detail="Member ID must use FL followed by 8 digits")
+    if not member_code:
+        member_code = _generate_member_code(db)
+    elif db.query(models.User.id).filter(
+        models.User.member_code.ilike(member_code), models.User.id != account.id
+    ).first():
+        raise HTTPException(status_code=409, detail="Member ID is already used by another account")
+
+    account.phone = phone
+    account.member_code = member_code
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Phone or Member ID is already in use") from exc
+    db.refresh(account)
+    return serialize_member(account)
+
+
+@router.delete("/{member_id}/membership")
+def admin_remove_membership(
+    member_id: int,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    account = db.query(models.User).filter(models.User.id == member_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if not account.member_code:
+        raise HTTPException(status_code=409, detail="Account has no membership capability")
+
+    conflicts = _membership_removal_conflicts(db, account.id)
+    if conflicts:
+        raise HTTPException(
+            status_code=409,
+            detail="Membership cannot be removed while retained references exist: "
+            + ", ".join(conflicts),
+        )
+    account.member_code = None
+    account.phone = None
+    db.commit()
+    db.refresh(account)
+    return {
+        "id": account.id,
+        "email": account.email,
+        "name": account.name,
+        "is_admin": bool(account.is_admin),
+        "member_code": account.member_code,
+        "phone": account.phone,
+        "is_active": bool(account.is_active),
+    }
 
 
 @router.put("/{member_id}")

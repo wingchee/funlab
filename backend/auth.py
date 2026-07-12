@@ -48,7 +48,11 @@ def _get_user_from_token(token: str, db: Session) -> Optional[models.User]:
         user_id = int(payload["sub"])
     except (JWTError, ValueError, KeyError):
         return None
-    return db.query(models.User).filter(models.User.id == user_id).first()
+    return (
+        db.query(models.User)
+        .filter(models.User.id == user_id, models.User.is_active.is_(True))
+        .first()
+    )
 
 
 def get_current_user(

@@ -88,6 +88,101 @@ def test_production_scripts_verify_database_backup_before_starting_migrations():
         ) < main.index("deploy_stack")
 
 
+def test_production_scripts_quiesce_writes_through_backend_health_verification():
+    for script_path in (SCRIPT, DIGITALOCEAN_SCRIPT):
+        script = script_path.read_text(encoding="utf-8")
+        main = script.split("main() {", 1)[1]
+
+        assert "quiesce_writes()" in script
+        assert "recover_quiesced_services()" in script
+        assert 'compose stop frontend backend' in script
+        assert main.index("quiesce_writes") < main.index("backup_database")
+        assert main.index("backup_database") < main.index("deploy_stack")
+        assert main.index("deploy_stack") < main.index("verify_backend")
+        assert main.index("verify_backend") < main.index("resume_public_stack")
+        assert "trap 'recover_quiesced_services $?" in main
+        assert "trap 'recover_quiesced_services $?' EXIT" in main
+
+
+@pytest.mark.parametrize("script_path", (SCRIPT, DIGITALOCEAN_SCRIPT))
+def test_quiesce_failure_restarts_prior_services_when_replacement_has_not_started(
+    tmp_path, script_path
+):
+    harness = tmp_path / "quiesce-harness.sh"
+    harness.write_text(
+        textwrap.dedent(
+            f"""\
+            #!/usr/bin/env bash
+            set -Eeuo pipefail
+            source {str(script_path)!r}
+            calls=""
+            log() {{ :; }}
+            compose() {{
+              calls="${{calls}}|$*"
+              if [[ "$*" == "ps --status running -q backend" ]]; then printf backend-id; fi
+              if [[ "$*" == "ps --status running -q frontend" ]]; then printf frontend-id; fi
+            }}
+
+            quiesce_writes
+            [[ "${{calls}}" == *"stop frontend backend"* ]]
+            recover_quiesced_services 23 || status=$?
+            [[ "${{status}}" == 23 ]]
+            [[ "${{calls}}" == *"start backend"* ]]
+            [[ "${{calls}}" == *"start frontend"* ]]
+
+            calls=""
+            quiesce_writes
+            BACKEND_REPLACEMENT_STARTED=true
+            recover_quiesced_services 24 || status=$?
+            [[ "${{status}}" == 24 ]]
+            [[ "${{calls}}" != *"start backend"* ]]
+            [[ "${{calls}}" != *"start frontend"* ]]
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", str(harness)], text=True, capture_output=True, check=False
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("script_path", (SCRIPT, DIGITALOCEAN_SCRIPT))
+def test_explicit_exit_failure_also_recovers_prior_services(tmp_path, script_path):
+    calls = tmp_path / "calls"
+    harness = tmp_path / "exit-recovery-harness.sh"
+    harness.write_text(
+        textwrap.dedent(
+            f"""\
+            #!/usr/bin/env bash
+            set -Eeuo pipefail
+            source {str(script_path)!r}
+            BACKEND_WAS_RUNNING=true
+            FRONTEND_WAS_RUNNING=true
+            WRITES_QUIESCED=true
+            BACKEND_REPLACEMENT_STARTED=false
+            log() {{ :; }}
+            compose() {{ printf '%s\n' "$*" >> {str(calls)!r}; }}
+            trap 'recover_quiesced_services $?' EXIT
+            exit 31
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", str(harness)], text=True, capture_output=True, check=False
+    )
+
+    assert result.returncode == 31
+    assert calls.read_text(encoding="utf-8").splitlines() == [
+        "start backend",
+        "start frontend",
+    ]
+
+
 def test_production_scripts_record_previous_commit_and_rotate_secret_only_once():
     for script_path in (SCRIPT, DIGITALOCEAN_SCRIPT):
         script = script_path.read_text(encoding="utf-8")

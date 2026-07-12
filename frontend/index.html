@@ -3020,6 +3020,7 @@ function MembershipPage({ user, onLogout }) {
   const [selectedQrUrl, setSelectedQrUrl] = useState('');
   const [packageForm, setPackageForm] = useState({ package_name:'10-hour package', hours:'10' });
   const [editForm, setEditForm] = useState({ email:'', name:'', phone:'', password:'', is_active:true, notes:'' });
+  const [promotionPhone, setPromotionPhone] = useState('');
   const [checkInTable, setCheckInTable] = useState('1');
   const [manualMemberCode, setManualMemberCode] = useState('');
   const videoRef = useRef(null);
@@ -3073,7 +3074,7 @@ function MembershipPage({ user, onLogout }) {
   }, [isAdmin, search, loadTables]);
 
   useEffect(() => {
-    if (!selected?.id) {
+    if (!selected?.id || !selected?.member_code) {
       setSelectedQrUrl('');
       return;
     }
@@ -3100,6 +3101,7 @@ function MembershipPage({ user, onLogout }) {
       is_active:selected.is_active !== false,
       notes:selected.notes || '',
     });
+    setPromotionPhone(selected.phone || '');
   }, [selected?.id, selected?.email, selected?.name, selected?.phone, selected?.is_active, selected?.notes]);
 
   const saveMember = async () => {
@@ -3129,6 +3131,42 @@ function MembershipPage({ user, onLogout }) {
     setMembers(prev => prev.map(member => member.id === updated.id ? {...member,...updated} : member));
     await selectMember(updated);
     setMessage('Member profile updated.');
+  };
+
+  const promoteMembership = async () => {
+    if (!selected || !promotionPhone.trim()) {
+      setMessage('A valid unique phone is required to promote this account.');
+      return;
+    }
+    const res = await apiFetch(`/members/${selected.id}/membership`, {
+      method:'POST',
+      body:JSON.stringify({ phone:promotionPhone }),
+    });
+    if (!res?.ok) {
+      let detail = 'Unable to promote this account.';
+      try { detail = (await res.json())?.detail || detail; } catch (_) {}
+      setMessage(detail);
+      return;
+    }
+    const promoted = await res.json();
+    setMembers(prev => prev.map(account => account.id === promoted.id ? {...account,...promoted} : account));
+    await selectMember(promoted);
+    setMessage('Membership capability added. Administrator access is unchanged.');
+  };
+
+  const removeMembership = async () => {
+    if (!selected?.member_code || !window.confirm('Remove membership capability from this account?')) return;
+    const res = await apiFetch(`/members/${selected.id}/membership`, { method:'DELETE' });
+    if (!res?.ok) {
+      let detail = 'Unable to remove membership capability.';
+      try { detail = (await res.json())?.detail || detail; } catch (_) {}
+      setMessage(detail);
+      return;
+    }
+    const updated = await res.json();
+    setMembers(prev => prev.map(account => account.id === updated.id ? {...account,...updated} : account));
+    setSelected(prev => ({...prev,...updated,packages:[],visits:[]}));
+    setMessage('Membership capability removed. The account and administrator access remain active.');
   };
 
   const addPackage = async () => {
@@ -3304,7 +3342,7 @@ function MembershipPage({ user, onLogout }) {
             <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:18}}>
               <div style={{fontSize:12,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:800,marginBottom:12}}>Find Member</div>
               <div style={{display:'flex',gap:8,marginBottom:12}}>
-                <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&search(query)} placeholder="Name, phone, or Member ID" style={inputStyle}/>
+                <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&search(query)} placeholder="Name, email, phone, or Member ID" style={inputStyle}/>
                 <button onClick={() => search(query)} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'0 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Search</button>
               </div>
               <label style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Manual Member ID</label>
@@ -3334,8 +3372,8 @@ function MembershipPage({ user, onLogout }) {
                   border:'1px solid #F0EDEA',borderRadius:8,padding:12,marginBottom:8,cursor:'pointer',fontFamily:'inherit'
                 }}>
                   <div style={{fontWeight:800,color:'#1A1A18'}}>{member.name}</div>
-                  <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:'#777',marginTop:3}}>{member.member_code} · {member.phone}</div>
-                  <div style={{fontSize:12,color:T.accentRed,fontWeight:800,marginTop:4}}>{formatHours(member.remaining_seconds)} remaining</div>
+                  <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:'#777',marginTop:3}}>{member.member_code ? `${member.member_code} · ${member.phone}` : member.email}</div>
+                  <div style={{fontSize:12,color:T.accentRed,fontWeight:800,marginTop:4}}>{member.member_code ? `${formatHours(member.remaining_seconds)} remaining` : 'Account only · promotion available'}</div>
                 </button>
               ))}
             </div>
@@ -3349,18 +3387,26 @@ function MembershipPage({ user, onLogout }) {
                 <div style={{display:'flex',justifyContent:'space-between',gap:18,alignItems:'flex-start',marginBottom:18,flexWrap:'wrap'}}>
                   <div>
                     <h2 style={{fontSize:28,fontWeight:800,marginBottom:5}}>{selected.name}</h2>
-                    <div style={{fontFamily:'Space Mono,monospace',color:'#666',fontWeight:700}}>{selected.member_code}</div>
+                    <div style={{fontFamily:'Space Mono,monospace',color:'#666',fontWeight:700}}>{selected.member_code || 'Account only'}</div>
                     {selected.email && <div style={{color:'#777',fontSize:13,marginTop:4}}>{selected.email}</div>}
-                    <div style={{color:'#777',fontSize:13,marginTop:4}}>{selected.phone}</div>
+                    {selected.phone && <div style={{color:'#777',fontSize:13,marginTop:4}}>{selected.phone}</div>}
                   </div>
                   <div style={{background:`${T.accentRed}12`,border:`1px solid ${T.accentRed}30`,borderRadius:8,padding:'12px 14px',minWidth:150}}>
-                    <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#B95B6B',fontWeight:800}}>Remaining</div>
-                    <div style={{fontFamily:'Space Mono,monospace',fontSize:24,fontWeight:800,color:T.accentRed}}>{formatHours(selected.remaining_seconds)}</div>
+                    <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#B95B6B',fontWeight:800}}>{selected.member_code ? 'Remaining' : 'Capability'}</div>
+                    <div style={{fontFamily:'Space Mono,monospace',fontSize:selected.member_code?24:14,fontWeight:800,color:T.accentRed}}>{selected.member_code ? formatHours(selected.remaining_seconds) : 'Account only'}</div>
                   </div>
                 </div>
 
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))',gap:14,marginBottom:18}}>
+                  {!selected.member_code ? (
                   <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
+                    <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Add Membership Capability</div>
+                    <div style={{display:'grid',gap:8}}>
+                      <input value={promotionPhone} onChange={e=>setPromotionPhone(e.target.value)} placeholder="Unique phone" type="tel" style={inputStyle}/>
+                      <button onClick={promoteMembership} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Promote to Member</button>
+                    </div>
+                  </div>
+                  ) : <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
                     <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Member Profile</div>
                     <div style={{display:'grid',gap:8}}>
                       <input value={editForm.email} onChange={e=>setEditForm(prev=>({...prev,email:e.target.value}))} placeholder="Email" type="email" style={inputStyle}/>
@@ -3373,8 +3419,9 @@ function MembershipPage({ user, onLogout }) {
                         Active membership
                       </label>
                       <button onClick={saveMember} style={{background:'#1A1A18',color:'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Save Member</button>
+                      <button onClick={removeMembership} style={{background:'#fff',color:'#B42318',border:'1px solid #F0B4AE',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Remove Membership</button>
                     </div>
-                  </div>
+                  </div>}
 
                   <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
                     <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Add Package</div>

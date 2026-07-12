@@ -196,6 +196,71 @@ class MigrationTests(unittest.TestCase):
                     ).fetchone()[0]
                 )
 
+    def test_raw_unstamped_malformed_legacy_members_do_not_block_head(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "raw-malformed.db"
+            prepared = self._upgrade(database_path, "20260711_0002")
+            self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+            with sqlite3.connect(database_path) as connection:
+                connection.executescript(
+                    """
+                    DROP INDEX ix_members_phone;
+                    DROP INDEX ix_members_email;
+                    DROP INDEX ix_member_visits_table_time_log_id;
+                    INSERT INTO users (id, email, password_hash, name, is_admin)
+                    VALUES (7, ' Admin@Example.COM ', 'preserved-hash', 'Admin', 1);
+                    INSERT INTO patterns
+                        (id, title, tags, size, grid_w, grid_h, faves_count,
+                         preview_color, palette, grid_data)
+                    VALUES (3, 'Keep', '[]', 'Small', 1, 1, 1, '#fff', '[]', '[]');
+                    INSERT INTO favorites (id, user_id, pattern_id) VALUES (9, 7, 3);
+                    INSERT INTO members
+                        (id, member_code, email, name, phone, is_active, notes)
+                    VALUES
+                        (1, 'FL00000001', ' DUP@example.com ', 'Broken One', '', 1, ''),
+                        (2, 'FL00000002', 'dup@example.com', 'Broken Two', '', 1, '');
+                    INSERT INTO member_packages
+                        (id, member_id, package_name, total_seconds, remaining_seconds, notes)
+                    VALUES (1, 1, 'Disposable', 3600, 3600, '');
+                    INSERT INTO table_time_logs
+                        (id, table_number, member_id, started_at, ended_at,
+                         occupied_seconds, charged_seconds)
+                    VALUES (4, 1, 1, '2026-01-01', '2026-01-01', 0, 0);
+                    INSERT INTO member_visits
+                        (id, member_id, table_time_log_id, table_number, checked_in_at,
+                         checked_out_at, occupied_seconds, charged_seconds,
+                         package_deducted_seconds, extra_due_seconds, notes)
+                    VALUES
+                        (5, 1, 4, 1, '2026-01-01', '2026-01-01', 0, 0, 0, 0, ''),
+                        (6, 2, 4, 1, '2026-01-01', '2026-01-01', 0, 0, 0, 0, '');
+                    DELETE FROM alembic_version;
+                    """
+                )
+
+            result = self._upgrade(database_path)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            with sqlite3.connect(database_path) as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT id, email, password_hash, name, is_admin FROM users"
+                    ).fetchone(),
+                    (7, " Admin@Example.COM ", "preserved-hash", "Admin", 1),
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT id, user_id, pattern_id FROM favorites"
+                    ).fetchone(),
+                    (9, 7, 3),
+                )
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM member_packages").fetchone()[0], 0)
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM member_visits").fetchone()[0], 0)
+                self.assertFalse(
+                    connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='members'"
+                    ).fetchone()
+                )
+
     def test_duplicate_normalized_user_emails_stop_migration(self):
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "duplicate-users.db"

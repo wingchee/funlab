@@ -58,10 +58,14 @@ def _normalize_existing_emails() -> None:
 
 
 def upgrade() -> None:
+    discard_legacy_members = bool(
+        op.get_bind().info.get("discard_legacy_members_at_unified_head")
+    )
     if "email" not in _column_names("members"):
         op.add_column("members", sa.Column("email", sa.String(), nullable=True))
-    _normalize_existing_emails()
-    if "ix_members_email" not in _index_map("members"):
+    if not discard_legacy_members:
+        _normalize_existing_emails()
+    if not discard_legacy_members and "ix_members_email" not in _index_map("members"):
         op.create_index("ix_members_email", "members", ["email"], unique=True)
 
     favorite_columns = _column_names("favorites")

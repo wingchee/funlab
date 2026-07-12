@@ -1,7 +1,7 @@
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -87,18 +87,16 @@ def register(body: schemas.MemberRegistration, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(body: schemas.AccountLogin, db: Session = Depends(get_db)):
     identifier = body.identifier.strip()
-    user = (
-        db.query(models.User)
-        .filter(
-            or_(
-                func.lower(func.trim(models.User.email)) == normalize_email(identifier),
-                models.User.phone == normalize_phone(identifier),
-                models.User.member_code.ilike(identifier),
-            ),
-            models.User.is_active.is_(True),
-        )
-        .first()
-    )
+    active_users = db.query(models.User).filter(models.User.is_active.is_(True))
+    user = active_users.filter(
+        func.lower(func.trim(models.User.email)) == normalize_email(identifier)
+    ).first()
+    if user is None:
+        phone = normalize_phone(identifier)
+        if phone:
+            user = active_users.filter(models.User.phone == phone).first()
+    if user is None:
+        user = active_users.filter(models.User.member_code.ilike(identifier)).first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     return {

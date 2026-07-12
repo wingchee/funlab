@@ -164,6 +164,13 @@ The unified-account migration rotates `SECRET_KEY` once, after backup verificati
 and records that rotation in `.env`. This intentionally signs all users out once.
 Later routine deployments preserve the rotated key and do not sign users out again.
 
+For an existing installation, both production deploy scripts stop the public frontend
+and backend before taking the rollback backup. They then start only the private backend,
+run migrations, and verify `/health` from inside that container while public writes stay
+blocked. The full stack resumes only after that check passes. A failure before container
+replacement restarts whichever prior services were running; a later failure leaves the
+frontend stopped so the pinned commit and first verified backup can be restored safely.
+
 ```bash
 # Inspect volume location
 docker volume inspect pindou_pindou_data

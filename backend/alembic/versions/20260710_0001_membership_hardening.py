@@ -311,15 +311,27 @@ def _seed_table_timers() -> None:
     )
 
 
+def _is_raw_unstamped_legacy_schema(tables_before: set[str]) -> bool:
+    if "members" not in tables_before or "alembic_version" not in _table_names():
+        return False
+    return op.get_bind().execute(
+        sa.text("SELECT COUNT(*) FROM alembic_version")
+    ).scalar_one() == 0
+
+
 def upgrade() -> None:
     tables_before = _table_names()
+    discard_legacy_members_at_unified_head = _is_raw_unstamped_legacy_schema(tables_before)
+    if discard_legacy_members_at_unified_head:
+        op.get_bind().info["discard_legacy_members_at_unified_head"] = True
     had_table_timers = "table_timers" in tables_before
     had_table_time_logs = "table_time_logs" in tables_before
     _create_core_tables()
     if had_table_timers or had_table_time_logs:
         _upgrade_existing_timetable_tables()
-    _normalize_and_constrain_members()
-    _constrain_member_visits()
+    if not discard_legacy_members_at_unified_head:
+        _normalize_and_constrain_members()
+        _constrain_member_visits()
     _seed_table_timers()
 
 

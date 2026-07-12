@@ -7,6 +7,11 @@ PORT="${PORT:-80}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pixelcraft}"
 ENABLE_UFW="${ENABLE_UFW:-true}"
 SKIP_DOCKER_INSTALL="${SKIP_DOCKER_INSTALL:-false}"
+BACKEND_WAS_RUNNING=false
+FRONTEND_WAS_RUNNING=false
+WRITES_QUIESCED=false
+BACKEND_REPLACEMENT_STARTED=false
+RECOVERY_ATTEMPTED=false
 
 log() {
   printf '\n[%s] %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$*"
@@ -31,6 +36,38 @@ compose() {
   else
     sudo docker compose --project-name "${COMPOSE_PROJECT_NAME}" --env-file "${ENV_FILE}" "$@"
   fi
+}
+
+quiesce_writes() {
+  local backend_id frontend_id
+  backend_id="$(compose ps --status running -q backend 2>/dev/null || true)"
+  frontend_id="$(compose ps --status running -q frontend 2>/dev/null || true)"
+  [[ -n "${backend_id}" ]] && BACKEND_WAS_RUNNING=true
+  [[ -n "${frontend_id}" ]] && FRONTEND_WAS_RUNNING=true
+  if [[ "${BACKEND_WAS_RUNNING}" == "true" || "${FRONTEND_WAS_RUNNING}" == "true" ]]; then
+    log "Quiescing public writes before the rollback backup"
+    compose stop frontend backend
+  else
+    log "No running backend or frontend to quiesce"
+  fi
+  WRITES_QUIESCED=true
+}
+
+recover_quiesced_services() {
+  local status="${1:-1}"
+  trap - ERR
+  if [[ "${RECOVERY_ATTEMPTED}" == "true" ]]; then
+    return "${status}"
+  fi
+  RECOVERY_ATTEMPTED=true
+  if [[ "${WRITES_QUIESCED}" == "true" && "${BACKEND_REPLACEMENT_STARTED}" != "true" ]]; then
+    log "Deployment failed before replacement; restarting the prior service state"
+    [[ "${BACKEND_WAS_RUNNING}" == "true" ]] && compose start backend || true
+    [[ "${FRONTEND_WAS_RUNNING}" == "true" ]] && compose start frontend || true
+  elif [[ "${WRITES_QUIESCED}" == "true" ]]; then
+    log "Deployment failed after backend replacement began; public writes remain blocked for checkpoint rollback"
+  fi
+  return "${status}"
 }
 
 require_ubuntu() {
@@ -244,9 +281,30 @@ configure_firewall() {
 }
 
 deploy_stack() {
-  log "Building and starting PixelCraft containers"
+  log "Building and starting the private backend for migration and health verification"
   cd "${APP_DIR}"
+  BACKEND_REPLACEMENT_STARTED=true
+  compose up --build -d backend
+}
+
+verify_backend() {
+  log "Verifying the migrated backend while public writes remain blocked"
+  local attempt
+  for attempt in $(seq 1 30); do
+    if compose exec -T backend python3 -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=10).read()' >/dev/null 2>&1; then
+      log "Private backend health verification passed"
+      return
+    fi
+    sleep 2
+  done
+  compose logs --tail=120 backend || true
+  fail "Backend did not pass private health verification"
+}
+
+resume_public_stack() {
+  log "Backend is healthy; resuming the public PixelCraft stack"
   compose up --build -d
+  WRITES_QUIESCED=false
 }
 
 verify_stack() {
@@ -274,12 +332,18 @@ main() {
   install_docker
   begin_deployment_checkpoint
   ensure_env_file
+  trap 'recover_quiesced_services $?' ERR
+  trap 'recover_quiesced_services $?' EXIT
+  quiesce_writes
   backup_database
   rotate_secret_for_unified_accounts_once
   configure_firewall
   deploy_stack
+  verify_backend
+  resume_public_stack
   verify_stack
   complete_deployment_checkpoint
+  trap - ERR EXIT
 
   log "Deployment complete. Open http://YOUR_DROPLET_IP:${PORT}"
 }

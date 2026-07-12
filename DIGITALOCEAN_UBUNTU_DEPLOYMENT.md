@@ -155,6 +155,14 @@ The unified-account release rotates `SECRET_KEY` once after the verified backup 
 persists a marker in `.env`. This intentionally signs all users out once. Repeated
 deployments keep the rotated key.
 
+For an existing installation, the script stops the public frontend and backend before
+creating that backup. It starts only the private backend for migration and an internal
+`/health` check, keeping public writes blocked until the check succeeds. It then resumes
+the complete stack and verifies the public endpoint. If failure occurs before container
+replacement, the previously running services are restarted automatically; after
+replacement begins, the frontend remains stopped for safe checkpoint rollback. Retries
+continue to preserve the original commit and first verified backup pointers.
+
 Back up the SQLite database:
 
 ```bash

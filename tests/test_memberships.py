@@ -79,6 +79,95 @@ class MembershipTests(unittest.TestCase):
         self.assertEqual(memberships.search_members(db, "999888")[0].id, bob.id)
         self.assertEqual(memberships.search_members(db, alice.member_code)[0].id, alice.id)
 
+    def test_staff_search_finds_admin_only_account_by_name_or_email(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Studio Owner",
+            is_admin=True,
+            is_active=True,
+            notes="",
+        )
+        db.add(admin)
+        db.commit()
+
+        self.assertEqual(memberships.search_members(db, "Studio Owner")[0].id, admin.id)
+        self.assertEqual(memberships.search_members(db, "owner@example.com")[0].id, admin.id)
+
+    def test_staff_can_promote_admin_to_dual_capability_and_remove_empty_membership(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+            is_active=True,
+            notes="keep account",
+        )
+        db.add(admin)
+        db.commit()
+
+        promoted = memberships.admin_promote_membership(
+            admin.id,
+            schemas.MembershipPromotion(phone="+60 12-345 6789"),
+            _=None,
+            db=db,
+        )
+
+        self.assertRegex(promoted["member_code"], r"^FL\d{8}$")
+        self.assertEqual(promoted["phone"], "60123456789")
+        db.refresh(admin)
+        self.assertTrue(admin.is_admin)
+        self.assertIs(get_membership_user(admin), admin)
+
+        removed = memberships.admin_remove_membership(admin.id, _=None, db=db)
+        self.assertTrue(removed["is_admin"])
+        self.assertIsNone(removed["member_code"])
+        self.assertIsNone(removed["phone"])
+        self.assertEqual(admin.email, "owner@example.com")
+
+    def test_staff_membership_promotion_requires_unique_valid_phone(self):
+        db = self._session()
+        memberships = self._memberships()
+        self._member(db, phone="60123456789")
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+            is_active=True,
+            notes="",
+        )
+        db.add(admin)
+        db.commit()
+
+        for phone in ("---", "+60 12-345 6789"):
+            with self.subTest(phone=phone), self.assertRaises(HTTPException) as raised:
+                memberships.admin_promote_membership(
+                    admin.id,
+                    schemas.MembershipPromotion(phone=phone),
+                    _=None,
+                    db=db,
+                )
+            self.assertIn(raised.exception.status_code, (400, 409))
+
+    def test_staff_cannot_remove_membership_with_retained_references(self):
+        db = self._session()
+        memberships = self._memberships()
+        member = self._member(db, phone="60123456789")
+        memberships.add_package_record(db, member, "Hours", 3600)
+
+        with self.assertRaises(HTTPException) as raised:
+            memberships.admin_remove_membership(member.id, _=None, db=db)
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("package", raised.exception.detail.lower())
+        db.refresh(member)
+        self.assertIsNotNone(member.member_code)
+
     def test_member_self_service_operations_use_membership_capable_user(self):
         db = self._session()
         memberships = self._memberships()

@@ -112,6 +112,16 @@ def test_admin_and_membership_capabilities_are_independent():
     assert "if (!user)" in html
 
 
+def test_staff_ui_can_promote_and_safely_remove_membership_capability():
+    html = read_frontend()
+
+    assert "Promote to Member" in html
+    assert "Remove Membership" in html
+    assert "method:'POST'" in html and "`/members/${selected.id}/membership`" in html
+    assert "method:'DELETE'" in html
+    assert 'placeholder="Name, email, phone, or Member ID"' in html
+
+
 def test_member_portal_ignores_stale_account_responses():
     html = read_frontend()
 

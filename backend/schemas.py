@@ -57,6 +57,11 @@ class MemberUpdate(BaseModel):
     notes: str = ""
 
 
+class MembershipPromotion(BaseModel):
+    phone: str
+    member_code: str = ""
+
+
 class MemberPackageCreate(BaseModel):
     package_name: str = "10-hour package"
     total_seconds: int = 10 * 60 * 60
