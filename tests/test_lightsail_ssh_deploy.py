@@ -183,6 +183,78 @@ def test_explicit_exit_failure_also_recovers_prior_services(tmp_path, script_pat
     ]
 
 
+@pytest.mark.parametrize("script_path", (SCRIPT, DIGITALOCEAN_SCRIPT))
+@pytest.mark.parametrize("failure_phase", ("build", "partial_stop"))
+def test_pre_replacement_failure_restores_services_and_pinned_checkpoint(
+    tmp_path, script_path, failure_phase
+):
+    calls = tmp_path / "calls"
+    harness = tmp_path / "pre-replacement-failure.sh"
+    harness.write_text(
+        textwrap.dedent(
+            f"""\
+            #!/usr/bin/env bash
+            set -Eeuo pipefail
+            source {str(script_path)!r}
+            APP_DIR={str(tmp_path)!r}
+            ENV_FILE="${{APP_DIR}}/.env"
+            failure_phase={failure_phase!r}
+            sudo_cmd() {{ "$@"; }}
+            log() {{ :; }}
+            revision=old-running-commit
+            current_git_revision() {{ printf '%s\n' "${{revision}}"; }}
+            compose() {{
+              printf '%s\n' "$*" >> {str(calls)!r}
+              case "$*" in
+                "ps --status running -q backend") printf backend-id ;;
+                "ps --status running -q frontend") printf frontend-id ;;
+                "stop frontend backend")
+                  [[ "${{failure_phase}}" == partial_stop ]] && return 41
+                  ;;
+                "build backend")
+                  [[ "${{failure_phase}}" == build ]] && return 42
+                  ;;
+              esac
+            }}
+
+            write_checkpoint_value "${{APP_DIR}}/.previous-deploy-commit" old-running-commit
+            write_checkpoint_value "${{APP_DIR}}/.rollback-backup" /backups/original.db
+            touch "${{APP_DIR}}/.deploy-in-progress"
+            revision=failed-new-commit
+            begin_deployment_checkpoint
+            persist_rollback_backup_once /backups/retry-diagnostic.db
+            trap 'recover_quiesced_services $?' ERR
+            trap 'recover_quiesced_services $?' EXIT
+            quiesce_writes
+            deploy_stack
+            trap - ERR EXIT
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", str(harness)], text=True, capture_output=True, check=False
+    )
+
+    assert result.returncode != 0
+    recorded_calls = calls.read_text(encoding="utf-8").splitlines()
+    assert "start backend" in recorded_calls
+    assert "start frontend" in recorded_calls
+    assert (tmp_path / ".previous-deploy-commit").read_text().strip() == "old-running-commit"
+    assert (tmp_path / ".rollback-backup").read_text().strip() == "/backups/original.db"
+
+
+def test_backend_build_completes_before_replacement_is_marked():
+    for script_path in (SCRIPT, DIGITALOCEAN_SCRIPT):
+        deploy = script_path.read_text(encoding="utf-8").split(
+            "deploy_stack() {", 1
+        )[1].split("verify_backend()", 1)[0]
+        assert deploy.index("compose build backend") < deploy.index(
+            "BACKEND_REPLACEMENT_STARTED=true"
+        ) < deploy.index("compose up -d backend")
+
+
 def test_production_scripts_record_previous_commit_and_rotate_secret_only_once():
     for script_path in (SCRIPT, DIGITALOCEAN_SCRIPT):
         script = script_path.read_text(encoding="utf-8")

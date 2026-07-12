@@ -3,6 +3,8 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import shutil
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -339,6 +341,93 @@ class MigrationTests(unittest.TestCase):
                 self.assertEqual(
                     connection.execute("PRAGMA index_info('ix_users_phone')").fetchone()[2],
                     "phone",
+                )
+
+    def test_fk_check_aborts_before_orphan_revision_and_stamp_commit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory_path = Path(directory)
+            database_path = directory_path / "orphan-rollback.db"
+            prepared = self._upgrade(database_path)
+            self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+            with sqlite3.connect(database_path) as connection:
+                connection.execute(
+                    "INSERT INTO users (id, email, password_hash, name, is_admin) "
+                    "VALUES (7, 'keep@example.com', 'preserved-hash', 'Keep', 1)"
+                )
+
+            migration_root = directory_path / "alembic"
+            shutil.copytree(BACKEND / "alembic", migration_root)
+            revision_path = migration_root / "versions" / "test_fk_orphan.py"
+            revision_path.write_text(
+                textwrap.dedent(
+                    """\
+                    from alembic import op
+                    import sqlalchemy as sa
+
+                    revision = "test_fk_orphan"
+                    down_revision = "20260711_0003"
+                    branch_labels = None
+                    depends_on = None
+
+                    def upgrade():
+                        op.create_table(
+                            "orphan_probe",
+                            sa.Column("id", sa.Integer(), primary_key=True),
+                            sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id")),
+                        )
+                        op.execute("INSERT INTO orphan_probe (id, user_id) VALUES (1, 999)")
+
+                    def downgrade():
+                        op.drop_table("orphan_probe")
+                    """
+                ),
+                encoding="utf-8",
+            )
+            config_path = directory_path / "alembic.ini"
+            config_path.write_text(
+                (BACKEND / "alembic.ini").read_text(encoding="utf-8").replace(
+                    "script_location = %(here)s/alembic",
+                    f"script_location = {migration_root}",
+                ),
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env.update({"APP_ENV": "test", "DATABASE_URL": f"sqlite:///{database_path}"})
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "alembic",
+                    "-c",
+                    str(config_path),
+                    "upgrade",
+                    "test_fk_orphan",
+                ],
+                cwd=BACKEND,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Foreign key violations after Alembic migrations", result.stdout + result.stderr)
+            with sqlite3.connect(database_path) as connection:
+                self.assertEqual(
+                    connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
+                    "20260711_0003",
+                )
+                self.assertFalse(
+                    connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='orphan_probe'"
+                    ).fetchone()
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT email, password_hash FROM users WHERE id=7"
+                    ).fetchone(),
+                    ("keep@example.com", "preserved-hash"),
                 )
 
     def test_runtime_schema_mutation_is_removed_and_container_runs_migrations(self):

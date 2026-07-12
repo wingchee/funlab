@@ -67,11 +67,12 @@ quiesce_writes() {
   [[ -n "${frontend_id}" ]] && FRONTEND_WAS_RUNNING=true
   if [[ "${BACKEND_WAS_RUNNING}" == "true" || "${FRONTEND_WAS_RUNNING}" == "true" ]]; then
     log "Quiescing public writes before the rollback backup"
+    WRITES_QUIESCED=true
     compose stop frontend backend
   else
     log "No running backend or frontend to quiesce"
+    WRITES_QUIESCED=true
   fi
-  WRITES_QUIESCED=true
 }
 
 recover_quiesced_services() {
@@ -371,8 +372,9 @@ configure_firewall() {
 deploy_stack() {
   log "Building and starting the private backend for migration and health verification"
   cd "${APP_DIR}"
+  compose build backend
   BACKEND_REPLACEMENT_STARTED=true
-  compose up --build -d backend
+  compose up -d backend
 }
 
 verify_backend() {

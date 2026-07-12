@@ -53,16 +53,27 @@ def run_migrations_online() -> None:
             compare_type=True,
             render_as_batch=connection.dialect.name == "sqlite",
         )
-        with context.begin_transaction():
-            context.run_migrations()
         if sqlite_batch_mode:
             connection.commit()
+            connection.exec_driver_sql("BEGIN")
+            try:
+                context.run_migrations()
+                violations = connection.exec_driver_sql(
+                    "PRAGMA foreign_key_check"
+                ).fetchall()
+                if violations:
+                    raise RuntimeError(
+                        f"Foreign key violations after Alembic migrations: {violations}"
+                    )
+            except Exception:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
             connection.exec_driver_sql("PRAGMA foreign_keys=ON")
-            violations = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
-            if violations:
-                raise RuntimeError(
-                    f"Foreign key violations after Alembic migrations: {violations}"
-                )
+        else:
+            with context.begin_transaction():
+                context.run_migrations()
 
 
 if context.is_offline_mode():
