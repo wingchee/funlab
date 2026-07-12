@@ -21,6 +21,10 @@ build/
 # Generated image-processing output
 outputs/
 
+# Local SQLite databases
+backend/data/*.db
+backend/data/*.db-*
+
 # Logs and temp files
 *.log
 tmp/
