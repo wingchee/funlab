@@ -26,10 +26,15 @@ Data is persisted in two named Docker volumes (`pindou_data`, `pindou_uploads`).
 # 1. Clone / enter the project directory
 cd pindou
 
-# 2. First launch — builds both images and starts everything
+# 2. Prepare required local configuration
+cp .env.example .env
+python3 -c "import secrets; print(secrets.token_hex(32))"
+# Paste the generated value after SECRET_KEY= in .env
+
+# 3. First launch — builds both images and starts everything
 docker compose up --build
 
-# 3. Open http://localhost in your browser
+# 4. Open http://localhost in your browser
 ```
 
 The backend seeds 8 demo patterns on first run. Subsequent restarts skip seeding.
