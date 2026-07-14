@@ -160,6 +160,32 @@ class MembershipTests(unittest.TestCase):
             ],
         )
 
+    def test_public_balance_link_lifecycle(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = models.User(
+            email="owner@example.com",
+            password_hash=hash_password("admin-pass"),
+            name="Owner",
+            is_admin=True,
+            is_active=True,
+            notes="",
+        )
+        db.add(admin)
+        db.commit()
+        created = memberships.admin_create_member(
+            schemas.MemberCreate(name="Ari", phone="+61 412 345 678"), _=admin, db=db
+        )
+        member = db.query(models.User).filter_by(id=created["id"]).one()
+        memberships.add_package_record(db, member, "Ten hours", 10 * 60 * 60)
+        before = memberships.public_member_balance(created["balance_access_token"], db=db)
+        rotated = memberships.regenerate_member_balance_link(member.id, _=admin, db=db)
+        with self.assertRaises(HTTPException) as raised:
+            memberships.public_member_balance(created["balance_access_token"], db=db)
+        self.assertEqual(raised.exception.status_code, 404)
+        after = memberships.public_member_balance(rotated["balance_access_token"], db=db)
+        self.assertEqual(after["remaining_seconds"], before["remaining_seconds"])
+
     def test_admin_member_detail_exposes_existing_balance_token_without_public_leakage(self):
         db = self._session()
         memberships = self._memberships()
