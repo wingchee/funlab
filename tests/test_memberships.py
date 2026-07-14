@@ -338,6 +338,54 @@ class MembershipTests(unittest.TestCase):
         self.assertIsNone(removed["phone"])
         self.assertEqual(admin.email, "owner@example.com")
 
+    def test_membership_transitions_rotate_private_balance_link(self):
+        db = self._session()
+        memberships = self._memberships()
+        account = models.User(
+            email="account@example.com",
+            password_hash=hash_password("account-pass"),
+            name="Account",
+            is_admin=True,
+            is_active=True,
+            notes="",
+        )
+        db.add(account)
+        db.commit()
+
+        memberships.admin_promote_membership(
+            account.id,
+            schemas.MembershipPromotion(phone="+60 12-345 6789"),
+            _=None,
+            db=db,
+        )
+        db.refresh(account)
+        first_token = account.balance_access_token
+        self.assertIsNotNone(first_token)
+        self.assertEqual(
+            memberships.public_member_balance(first_token, db=db)["name"], "Account"
+        )
+
+        memberships.admin_remove_membership(account.id, _=None, db=db)
+        db.refresh(account)
+        self.assertIsNone(account.balance_access_token)
+        with self.assertRaises(HTTPException) as revoked:
+            memberships.public_member_balance(first_token, db=db)
+        self.assertEqual(revoked.exception.status_code, 404)
+
+        memberships.admin_promote_membership(
+            account.id,
+            schemas.MembershipPromotion(phone="+60 12-345 6789"),
+            _=None,
+            db=db,
+        )
+        db.refresh(account)
+        self.assertIsNotNone(account.balance_access_token)
+        self.assertNotEqual(account.balance_access_token, first_token)
+        self.assertEqual(
+            memberships.public_member_balance(account.balance_access_token, db=db)["name"],
+            "Account",
+        )
+
     def test_staff_membership_promotion_requires_unique_valid_phone(self):
         db = self._session()
         memberships = self._memberships()

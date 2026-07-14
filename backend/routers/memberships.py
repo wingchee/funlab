@@ -528,6 +528,7 @@ def admin_promote_membership(
 
     account.phone = phone
     account.member_code = member_code
+    account.balance_access_token = _generate_balance_access_token(db)
     try:
         db.commit()
     except IntegrityError as exc:
@@ -557,6 +558,7 @@ def admin_remove_membership(
             + ", ".join(conflicts),
         )
     account.member_code = None
+    account.balance_access_token = None
     account.phone = None
     db.commit()
     db.refresh(account)
