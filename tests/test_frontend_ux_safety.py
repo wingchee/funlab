@@ -160,7 +160,7 @@ def test_member_portal_revokes_latest_qr_url_on_unmount():
     assert "qrUrlRef.current = ''" in html
 
 
-def test_membership_staff_header_places_refresh_before_mode_switcher():
+def test_membership_staff_header_keeps_refresh_control():
     html = read_frontend()
     staff_header_start = html.index(
         "Search members, scan QR codes, add packages, and check members into tables."
@@ -168,9 +168,22 @@ def test_membership_staff_header_places_refresh_before_mode_switcher():
     staff_header_end = html.index("{message &&", staff_header_start)
     staff_header = html[staff_header_start:staff_header_end]
 
-    assert staff_header.index("onClick={() => search('')}") < staff_header.index(
-        "['staff', 'Staff Dashboard']"
-    )
+    assert "onClick={() => search('')}" in staff_header
+    assert "Refresh" in staff_header
+
+
+def test_admin_membership_page_does_not_embed_member_portal():
+    html = read_frontend()
+    membership_source = html[
+        html.index("function MembershipPage({ user, onLogout })"):
+        html.index("function MemberPortalPage(")
+    ]
+
+    assert "const [membershipMode" not in membership_source
+    assert "['member', 'Member Portal']" not in membership_source
+    assert "<MemberPortalPage user={user} onLogout={onLogout} embedded/>" not in membership_source
+    assert "if (!isAdmin)" in membership_source
+    assert "<MemberPortalPage user={user} onLogout={onLogout}/>" in membership_source
 
 
 def test_dedicated_phone_inputs_use_an_australian_example():

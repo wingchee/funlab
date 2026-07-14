@@ -3070,7 +3070,6 @@ function AddMemberPage({ onCreated, onCancel }) {
 // ─── MEMBERSHIP DASHBOARD ─────────────────────────────────────────────────────
 function MembershipPage({ user, onLogout }) {
   const isAdmin = !!user?.is_admin;
-  const [membershipMode, setMembershipMode] = useState(isAdmin ? 'staff' : 'member');
   const [query, setQuery] = useState('');
   const [members, setMembers] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -3089,10 +3088,6 @@ function MembershipPage({ user, onLogout }) {
   const videoRef = useRef(null);
   const scanCanvasRef = useRef(null);
   const balanceQrUrlRef = useRef('');
-
-  useEffect(() => {
-    if (!isAdmin) setMembershipMode('member');
-  }, [isAdmin]);
 
   const inputStyle = {
     width:'100%',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 12px',
@@ -3411,35 +3406,7 @@ function MembershipPage({ user, onLogout }) {
   };
 
   if (!isAdmin) {
-    return (
-      <MemberPortalPage user={user} onLogout={onLogout}/>
-    );
-  }
-
-  if (membershipMode === 'member') {
-    return (
-      <div className="page-shell pixel-bg">
-        <div className="page-inner">
-          <div className="page-header" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:18,flexWrap:'wrap'}}>
-            <div>
-              <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'0',marginBottom:8}}>Membership</h1>
-              <p style={{color:'#888',fontSize:15}}>Switch between staff membership operations and the member-facing portal.</p>
-            </div>
-            <div style={{display:'flex',gap:8,background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:4}}>
-              {[
-                ['staff', 'Staff Dashboard'],
-                ['member', 'Member Portal'],
-              ].map(([id, label]) => (
-                <button key={id} onClick={() => setMembershipMode(id)} style={{background:membershipMode===id?T.accentRed:'transparent',color:membershipMode===id?'#fff':'#555',border:'none',borderRadius:6,padding:'9px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <MemberPortalPage user={user} onLogout={onLogout} embedded/>
-        </div>
-      </div>
-    );
+    return <MemberPortalPage user={user} onLogout={onLogout}/>;
   }
 
   if (staffView === 'add-member') {
@@ -3459,16 +3426,6 @@ function MembershipPage({ user, onLogout }) {
             <button onClick={() => search('')} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
               {loading ? 'Loading' : 'Refresh'}
             </button>
-            <div style={{display:'flex',gap:8,background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:4}}>
-              {[
-                ['staff', 'Staff Dashboard'],
-                ['member', 'Member Portal'],
-              ].map(([id, label]) => (
-                <button key={id} onClick={() => setMembershipMode(id)} style={{background:membershipMode===id?T.accentRed:'transparent',color:membershipMode===id?'#fff':'#555',border:'none',borderRadius:6,padding:'9px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
-                  {label}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
