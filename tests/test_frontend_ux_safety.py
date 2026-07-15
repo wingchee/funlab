@@ -133,7 +133,22 @@ def test_staff_ui_can_promote_and_safely_remove_membership_capability():
     assert "Remove Membership" in html
     assert "method:'POST'" in html and "`/members/${selected.id}/membership`" in html
     assert "method:'DELETE'" in html
-    assert 'placeholder="Name, email, phone, or Member ID"' in html
+    assert 'placeholder="Name, phone, or Member ID"' in html
+
+
+def test_membership_page_hides_email_from_staff_workflows():
+    html = read_frontend()
+    membership_source = html[
+        html.index("function MembershipPage({ user, onLogout })"):
+        html.index("function MemberPortalPage(")
+    ]
+
+    assert 'placeholder="Name, phone, or Member ID"' in membership_source
+    assert 'placeholder="Name, email, phone, or Member ID"' not in membership_source
+    assert 'member.email' not in membership_source
+    assert 'selected.email' not in membership_source
+    assert 'email:editForm.email' not in membership_source
+    assert 'placeholder="Email" type="email"' not in membership_source
 
 
 def test_member_portal_ignores_stale_account_responses():

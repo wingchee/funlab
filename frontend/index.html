@@ -3080,7 +3080,7 @@ function MembershipPage({ user, onLogout }) {
   const [scanning, setScanning] = useState(false);
   const [selectedQrUrl, setSelectedQrUrl] = useState('');
   const [packageForm, setPackageForm] = useState({ package_name:'10-hour package', hours:'10' });
-  const [editForm, setEditForm] = useState({ email:'', name:'', phone:'', password:'', is_active:true, notes:'' });
+  const [editForm, setEditForm] = useState({ name:'', phone:'', password:'', is_active:true, notes:'' });
   const [promotionPhone, setPromotionPhone] = useState('');
   const [checkInTable, setCheckInTable] = useState('1');
   const [manualMemberCode, setManualMemberCode] = useState('');
@@ -3162,7 +3162,6 @@ function MembershipPage({ user, onLogout }) {
   useEffect(() => {
     if (!selected) return;
     setEditForm({
-      email:selected.email || '',
       name:selected.name || '',
       phone:selected.phone || '',
       password:'',
@@ -3170,7 +3169,7 @@ function MembershipPage({ user, onLogout }) {
       notes:selected.notes || '',
     });
     setPromotionPhone(selected.phone || '');
-  }, [selected?.id, selected?.email, selected?.name, selected?.phone, selected?.is_active, selected?.notes]);
+  }, [selected?.id, selected?.name, selected?.phone, selected?.is_active, selected?.notes]);
 
   const saveMember = async () => {
     if (!selected) return;
@@ -3181,7 +3180,6 @@ function MembershipPage({ user, onLogout }) {
     const res = await apiFetch(`/members/${selected.id}`, {
       method:'PUT',
       body:JSON.stringify({
-        email:editForm.email,
         name:editForm.name,
         phone:editForm.phone,
         password:editForm.password,
@@ -3436,7 +3434,7 @@ function MembershipPage({ user, onLogout }) {
             <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:18}}>
               <div style={{fontSize:12,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:800,marginBottom:12}}>Find Member</div>
               <div style={{display:'flex',gap:8,marginBottom:12}}>
-                <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&search(query)} placeholder="Name, email, phone, or Member ID" style={inputStyle}/>
+                <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&search(query)} placeholder="Name, phone, or Member ID" style={inputStyle}/>
                 <button onClick={() => search(query)} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'0 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Search</button>
               </div>
               <label style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Manual Member ID</label>
@@ -3466,7 +3464,7 @@ function MembershipPage({ user, onLogout }) {
                   border:'1px solid #F0EDEA',borderRadius:8,padding:12,marginBottom:8,cursor:'pointer',fontFamily:'inherit'
                 }}>
                   <div style={{fontWeight:800,color:'#1A1A18'}}>{member.name}</div>
-                  <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:'#777',marginTop:3}}>{member.member_code ? `${member.member_code} · ${member.phone}` : member.email}</div>
+                  <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:'#777',marginTop:3}}>{member.member_code ? `${member.member_code} · ${member.phone}` : 'Account only'}</div>
                   <div style={{fontSize:12,color:T.accentRed,fontWeight:800,marginTop:4}}>{member.member_code ? `${formatHours(member.remaining_seconds)} remaining` : 'Account only · promotion available'}</div>
                 </button>
               ))}
@@ -3482,7 +3480,6 @@ function MembershipPage({ user, onLogout }) {
                   <div>
                     <h2 style={{fontSize:28,fontWeight:800,marginBottom:5}}>{selected.name}</h2>
                     <div style={{fontFamily:'Space Mono,monospace',color:'#666',fontWeight:700}}>{selected.member_code || 'Account only'}</div>
-                    {selected.email && <div style={{color:'#777',fontSize:13,marginTop:4}}>{selected.email}</div>}
                     {selected.phone && <div style={{color:'#777',fontSize:13,marginTop:4}}>{selected.phone}</div>}
                   </div>
                   <div style={{background:`${T.accentRed}12`,border:`1px solid ${T.accentRed}30`,borderRadius:8,padding:'12px 14px',minWidth:150}}>
@@ -3512,7 +3509,6 @@ function MembershipPage({ user, onLogout }) {
                   ) : <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
                     <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Member Profile</div>
                     <div style={{display:'grid',gap:8}}>
-                      <input value={editForm.email} onChange={e=>setEditForm(prev=>({...prev,email:e.target.value}))} placeholder="Email" type="email" style={inputStyle}/>
                       <input value={editForm.name} onChange={e=>setEditForm(prev=>({...prev,name:e.target.value}))} placeholder="Name" style={inputStyle}/>
                       <input value={editForm.phone} onChange={e=>setEditForm(prev=>({...prev,phone:e.target.value}))} placeholder="+61 412 345 678" type="tel" style={inputStyle}/>
                       <input value={editForm.password} onChange={e=>setEditForm(prev=>({...prev,password:e.target.value}))} placeholder="New password (optional)" type="password" style={inputStyle}/>
