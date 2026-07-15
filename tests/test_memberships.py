@@ -71,15 +71,26 @@ class MembershipTests(unittest.TestCase):
         self.assertNotIn("member_auth", source)
         self.assertNotRegex(source, r"models\.Member\b")
 
-    def test_member_code_is_searchable_by_name_email_phone_or_code(self):
+    def test_member_is_searchable_by_name_phone_or_code(self):
         db = self._session()
         memberships = self._memberships()
         alice = self._member(db, name="Alice Tan", phone="60123456781")
         bob = self._member(db, name="Bob Lee", phone="60129998887")
         self.assertEqual(memberships.search_members(db, "alice")[0].id, alice.id)
-        self.assertEqual(memberships.search_members(db, alice.email)[0].id, alice.id)
         self.assertEqual(memberships.search_members(db, "999888")[0].id, bob.id)
         self.assertEqual(memberships.search_members(db, alice.member_code)[0].id, alice.id)
+
+    def test_member_search_does_not_match_email_only_query(self):
+        db = self._session()
+        memberships = self._memberships()
+        member = self._member(
+            db,
+            name="Alice Tan",
+            phone="60123456781",
+            email="alice.private@example.com",
+        )
+
+        self.assertNotIn(member.id, [result.id for result in memberships.search_members(db, member.email)])
 
     def test_admin_creates_member_with_normalized_phone_and_private_balance_link(self):
         db = self._session()
@@ -288,7 +299,7 @@ class MembershipTests(unittest.TestCase):
                 memberships.admin_member_balance_qr(created["id"], origin=origin, _=admin, db=db)
             self.assertEqual(raised.exception.status_code, 400)
 
-    def test_staff_search_finds_admin_only_account_by_name_or_email(self):
+    def test_staff_search_finds_admin_only_account_by_name(self):
         db = self._session()
         memberships = self._memberships()
         admin = models.User(
@@ -303,7 +314,6 @@ class MembershipTests(unittest.TestCase):
         db.commit()
 
         self.assertEqual(memberships.search_members(db, "Studio Owner")[0].id, admin.id)
-        self.assertEqual(memberships.search_members(db, "owner@example.com")[0].id, admin.id)
 
     def test_staff_can_promote_admin_to_dual_capability_and_remove_empty_membership(self):
         db = self._session()

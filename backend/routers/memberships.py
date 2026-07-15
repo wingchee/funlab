@@ -96,7 +96,6 @@ def search_members(db: Session, query: str, limit: int = 25) -> list[models.User
         .filter(
             or_(
                 models.User.name.ilike(like),
-                models.User.email.ilike(like),
                 models.User.phone.ilike(phone_like),
                 models.User.member_code.ilike(like),
             ),
