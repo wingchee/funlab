@@ -19,6 +19,20 @@ def test_profile_avatar_opens_an_explicit_account_menu():
     assert "click to logout" not in html.lower()
 
 
+def test_profile_settings_are_scoped_to_authenticated_account_navigation():
+    html = read_frontend()
+    navbar_source = html[html.index("function Navbar"):html.index("function MobileNavDrawer")]
+    mobile_source = html[html.index("function MobileNavDrawer"):html.index("// ─── PUBLIC OFFICIAL WEBSITE")]
+    profile_source = html[html.index("function ProfilePage"):html.index("// ─── LOGIN MODAL")]
+
+    assert "function ProfilePage" in html
+    assert "apiFetch('/auth/profile'" in html
+    assert "setPage('profile')" in navbar_source
+    assert "onClick={() => goToPage('profile')}>Profile</button>" in mobile_source
+    assert 'readOnly value={user.email}' in html
+    assert "localStorage" not in profile_source
+
+
 def test_app_has_non_blocking_action_notifications():
     html = read_frontend()
 
