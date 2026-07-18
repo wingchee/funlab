@@ -26,3 +26,4 @@ outputs/
 tmp/
 temp/
 .superpowers/
+.worktrees/
