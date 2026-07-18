@@ -33,6 +33,22 @@ def test_profile_settings_are_scoped_to_authenticated_account_navigation():
     assert "localStorage" not in profile_source
 
 
+def test_profile_updates_ignore_stale_account_sessions_and_announce_errors():
+    html = read_frontend()
+    profile_source = html[html.index("function ProfilePage"):html.index("// ─── LOGIN MODAL")]
+    app_source = html[html.index("function App()"):html.index("const isPublicMemberBalanceRoute")]
+
+    assert "const requestSession = { ...getAccountSession() };" in profile_source
+    assert profile_source.count("if (!isAccountSessionCurrent(requestSession) || account.id !== requestSession.accountId) return;") == 2
+    assert "const accountSessionRef = useRef({ token:null, accountId:null });" in app_source
+    assert "accountSessionRef.current = { token:null, accountId:null };" in app_source
+    assert "localStorage.getItem('pc_token') !== session.token" in app_source
+    assert "storeAccountSession(updatedAccount, localStorage.getItem('pc_token'));" in app_source
+    assert 'id="profile-email-error" role="alert"' in profile_source
+    assert 'aria-describedby={emailMessage ? \'profile-email-error\' : undefined}' in profile_source
+    assert 'aria-describedby={passwordMessage ? \'profile-password-error\' : undefined}' in profile_source
+
+
 def test_app_has_non_blocking_action_notifications():
     html = read_frontend()
 

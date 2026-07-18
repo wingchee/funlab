@@ -3850,7 +3850,7 @@ function PublicMemberBalancePage({ token }) {
 }
 
 // ─── PROFILE SETTINGS ─────────────────────────────────────────────────────────
-function ProfilePage({ user, notify, onAccountUpdated }) {
+function ProfilePage({ user, notify, onAccountUpdated, getAccountSession, isAccountSessionCurrent }) {
   const [newEmail, setNewEmail] = useState('');
   const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -3895,6 +3895,7 @@ function ProfilePage({ user, notify, onAccountUpdated }) {
       showEmailError('Enter your current password to update your email.');
       return;
     }
+    const requestSession = { ...getAccountSession() };
     setEmailPending(true);
     setEmailMessage('');
     try {
@@ -3907,7 +3908,8 @@ function ProfilePage({ user, notify, onAccountUpdated }) {
         return;
       }
       const account = await res.json();
-      onAccountUpdated(account);
+      if (!isAccountSessionCurrent(requestSession) || account.id !== requestSession.accountId) return;
+      onAccountUpdated(account, requestSession);
       setNewEmail('');
       setEmailCurrentPassword('');
       notify('Email updated.', 'success');
@@ -3932,6 +3934,7 @@ function ProfilePage({ user, notify, onAccountUpdated }) {
       showPasswordError('Your new password and confirmation must match.');
       return;
     }
+    const requestSession = { ...getAccountSession() };
     setPasswordPending(true);
     setPasswordMessage('');
     try {
@@ -3944,7 +3947,8 @@ function ProfilePage({ user, notify, onAccountUpdated }) {
         return;
       }
       const account = await res.json();
-      onAccountUpdated(account);
+      if (!isAccountSessionCurrent(requestSession) || account.id !== requestSession.accountId) return;
+      onAccountUpdated(account, requestSession);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -3973,13 +3977,13 @@ function ProfilePage({ user, notify, onAccountUpdated }) {
               <input type="email" readOnly value={user.email} style={{...inputStyle,marginTop:6,color:'#777',background:'#f2f1ee',cursor:'default'}} />
             </label>
             <label style={{fontSize:12,fontWeight:700,color:'#555'}}>New email
-              <input type="email" value={newEmail} onChange={event => setNewEmail(event.target.value)} autoComplete="email" style={{...inputStyle,marginTop:6}} />
+              <input type="email" value={newEmail} onChange={event => setNewEmail(event.target.value)} autoComplete="email" aria-invalid={!!emailMessage} aria-describedby={emailMessage ? 'profile-email-error' : undefined} style={{...inputStyle,marginTop:6}} />
             </label>
             <label style={{fontSize:12,fontWeight:700,color:'#555'}}>Current password
-              <input type="password" value={emailCurrentPassword} onChange={event => setEmailCurrentPassword(event.target.value)} autoComplete="current-password" style={{...inputStyle,marginTop:6}} />
+              <input type="password" value={emailCurrentPassword} onChange={event => setEmailCurrentPassword(event.target.value)} autoComplete="current-password" aria-invalid={!!emailMessage} aria-describedby={emailMessage ? 'profile-email-error' : undefined} style={{...inputStyle,marginTop:6}} />
             </label>
           </div>
-          {emailMessage && <div style={messageStyle}>{emailMessage}</div>}
+          {emailMessage && <div id="profile-email-error" role="alert" style={messageStyle}>{emailMessage}</div>}
           <button type="submit" disabled={emailPending} className="btn btn-primary" style={{marginTop:18,opacity:emailPending ? 0.65 : 1}}>
             {emailPending ? 'Updating email...' : 'Update email'}
           </button>
@@ -3990,16 +3994,16 @@ function ProfilePage({ user, notify, onAccountUpdated }) {
           <p style={{color:'#71696C',fontSize:13,margin:'5px 0 18px'}}>Choose a new password with at least 8 characters.</p>
           <div style={{display:'grid',gap:14}}>
             <label style={{fontSize:12,fontWeight:700,color:'#555'}}>Current password
-              <input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" style={{...inputStyle,marginTop:6}} />
+              <input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" aria-invalid={!!passwordMessage} aria-describedby={passwordMessage ? 'profile-password-error' : undefined} style={{...inputStyle,marginTop:6}} />
             </label>
             <label style={{fontSize:12,fontWeight:700,color:'#555'}}>New password
-              <input type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" style={{...inputStyle,marginTop:6}} />
+              <input type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" aria-invalid={!!passwordMessage} aria-describedby={passwordMessage ? 'profile-password-error' : undefined} style={{...inputStyle,marginTop:6}} />
             </label>
             <label style={{fontSize:12,fontWeight:700,color:'#555'}}>Confirm new password
-              <input type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" style={{...inputStyle,marginTop:6}} />
+              <input type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" aria-invalid={!!passwordMessage} aria-describedby={passwordMessage ? 'profile-password-error' : undefined} style={{...inputStyle,marginTop:6}} />
             </label>
           </div>
-          {passwordMessage && <div style={messageStyle}>{passwordMessage}</div>}
+          {passwordMessage && <div id="profile-password-error" role="alert" style={messageStyle}>{passwordMessage}</div>}
           <button type="submit" disabled={passwordPending} className="btn btn-primary" style={{marginTop:18,opacity:passwordPending ? 0.65 : 1}}>
             {passwordPending ? 'Updating password...' : 'Update password'}
           </button>
@@ -4128,10 +4132,18 @@ function App() {
   const [openPattern, setOpenPattern] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notification, setNotification] = useState(null);
+  const accountSessionRef = useRef({ token:null, accountId:null });
 
   const notify = useCallback((message, tone = 'info') => {
     setNotification({ id: Date.now(), message, tone });
   }, []);
+
+  const getAccountSession = () => accountSessionRef.current;
+  const isAccountSessionCurrent = session => (
+    !!session?.token
+    && accountSessionRef.current.token === session.token
+    && accountSessionRef.current.accountId === session.accountId
+  );
 
   useEffect(() => {
     if (!notification) return;
@@ -4172,13 +4184,19 @@ function App() {
     apiFetch('/auth/me').then(async res => {
       if (res?.ok) {
         const account = await res.json();
+        if (localStorage.getItem('pc_token') !== token) return;
+        accountSessionRef.current = { token, accountId:account.id };
         setUser(storeAccountSession(account, token));
         loadFavIds();
       } else {
+        if (localStorage.getItem('pc_token') !== token) return;
+        accountSessionRef.current = { token:null, accountId:null };
         clearAccountSession();
         notify(res ? 'Your session expired. Please sign in again.' : 'Could not verify your session. Please sign in again.', 'error');
       }
     }).catch(() => {
+      if (localStorage.getItem('pc_token') !== token) return;
+      accountSessionRef.current = { token:null, accountId:null };
       clearAccountSession();
       notify('Could not verify your session. Please sign in again.', 'error');
     })
@@ -4253,12 +4271,14 @@ function App() {
   };
 
   const onLogin = (userData, token) => {
+    accountSessionRef.current = { token, accountId:userData.id };
     setUser(storeAccountSession(userData, token));
     loadFavIds();
     notify(`Signed in as ${userData.name}.`, 'success');
   };
 
   const onLogout = () => {
+    accountSessionRef.current = { token:null, accountId:null };
     clearAccountSession();
     setUser(null);
     setFavIds(new Set());
@@ -4266,7 +4286,8 @@ function App() {
     notify('Signed out.', 'success');
   };
 
-  const onAccountUpdated = updatedAccount => {
+  const onAccountUpdated = (updatedAccount, session) => {
+    if (!isAccountSessionCurrent(session) || localStorage.getItem('pc_token') !== session.token || updatedAccount.id !== session.accountId) return;
     storeAccountSession(updatedAccount, localStorage.getItem('pc_token'));
     setUser(updatedAccount);
   };
@@ -4317,7 +4338,7 @@ function App() {
         <MembershipPage user={user} onLogout={onLogout}/>
       )}
       {page === 'profile' && user && (
-        <ProfilePage user={user} notify={notify} onAccountUpdated={onAccountUpdated}/>
+        <ProfilePage user={user} notify={notify} onAccountUpdated={onAccountUpdated} getAccountSession={getAccountSession} isAccountSessionCurrent={isAccountSessionCurrent}/>
       )}
       {page === 'admin' && user?.is_admin && (
         <AdminPage onPatternPublished={loadPatterns}/>
