@@ -3904,18 +3904,23 @@ function ProfilePage({ user, notify, onAccountUpdated, getAccountSession, isAcco
         body:JSON.stringify({ email, current_password:emailCurrentPassword }),
       });
       if (!res?.ok) {
-        showEmailError(res ? await readError(res, 'Unable to update your email.') : 'Unable to reach the server.');
+        const message = res ? await readError(res, 'Unable to update your email.') : 'Unable to reach the server.';
+        if (!isAccountSessionCurrent(requestSession)) return;
+        showEmailError(message);
         return;
       }
       const account = await res.json();
-      if (!isAccountSessionCurrent(requestSession) || account.id !== requestSession.accountId) return;
+      if (!isAccountSessionCurrent(requestSession)) return;
+      if (account.id !== requestSession.accountId) return;
       onAccountUpdated(account, requestSession);
       setNewEmail('');
       setEmailCurrentPassword('');
       notify('Email updated.', 'success');
     } catch (error) {
+      if (!isAccountSessionCurrent(requestSession)) return;
       showEmailError('Unable to update your email. Please try again.');
     } finally {
+      if (!isAccountSessionCurrent(requestSession)) return;
       setEmailPending(false);
     }
   };
@@ -3943,19 +3948,24 @@ function ProfilePage({ user, notify, onAccountUpdated, getAccountSession, isAcco
         body:JSON.stringify({ current_password:currentPassword, new_password:newPassword }),
       });
       if (!res?.ok) {
-        showPasswordError(res ? await readError(res, 'Unable to update your password.') : 'Unable to reach the server.');
+        const message = res ? await readError(res, 'Unable to update your password.') : 'Unable to reach the server.';
+        if (!isAccountSessionCurrent(requestSession)) return;
+        showPasswordError(message);
         return;
       }
       const account = await res.json();
-      if (!isAccountSessionCurrent(requestSession) || account.id !== requestSession.accountId) return;
+      if (!isAccountSessionCurrent(requestSession)) return;
+      if (account.id !== requestSession.accountId) return;
       onAccountUpdated(account, requestSession);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       notify('Password updated.', 'success');
     } catch (error) {
+      if (!isAccountSessionCurrent(requestSession)) return;
       showPasswordError('Unable to update your password. Please try again.');
     } finally {
+      if (!isAccountSessionCurrent(requestSession)) return;
       setPasswordPending(false);
     }
   };
@@ -4132,17 +4142,24 @@ function App() {
   const [openPattern, setOpenPattern] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notification, setNotification] = useState(null);
-  const accountSessionRef = useRef({ token:null, accountId:null });
+  const accountSessionRef = useRef({ accountId:null, generation:0 });
+  const accountSessionGenerationRef = useRef(0);
 
   const notify = useCallback((message, tone = 'info') => {
     setNotification({ id: Date.now(), message, tone });
   }, []);
 
+  const beginAccountSession = accountId => {
+    accountSessionRef.current = { accountId, generation: ++accountSessionGenerationRef.current };
+  };
+  const endAccountSession = () => {
+    accountSessionRef.current = { accountId:null, generation: ++accountSessionGenerationRef.current };
+  };
   const getAccountSession = () => accountSessionRef.current;
   const isAccountSessionCurrent = session => (
-    !!session?.token
-    && accountSessionRef.current.token === session.token
+    session?.accountId != null
     && accountSessionRef.current.accountId === session.accountId
+    && accountSessionRef.current.generation === session.generation
   );
 
   useEffect(() => {
@@ -4181,22 +4198,23 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('pc_token');
     if (!token) { setAuthLoading(false); return; }
+    const authGeneration = accountSessionGenerationRef.current;
     apiFetch('/auth/me').then(async res => {
       if (res?.ok) {
         const account = await res.json();
-        if (localStorage.getItem('pc_token') !== token) return;
-        accountSessionRef.current = { token, accountId:account.id };
+        if (accountSessionGenerationRef.current !== authGeneration) return;
+        beginAccountSession(account.id);
         setUser(storeAccountSession(account, token));
         loadFavIds();
       } else {
-        if (localStorage.getItem('pc_token') !== token) return;
-        accountSessionRef.current = { token:null, accountId:null };
+        if (accountSessionGenerationRef.current !== authGeneration) return;
+        endAccountSession();
         clearAccountSession();
         notify(res ? 'Your session expired. Please sign in again.' : 'Could not verify your session. Please sign in again.', 'error');
       }
     }).catch(() => {
-      if (localStorage.getItem('pc_token') !== token) return;
-      accountSessionRef.current = { token:null, accountId:null };
+      if (accountSessionGenerationRef.current !== authGeneration) return;
+      endAccountSession();
       clearAccountSession();
       notify('Could not verify your session. Please sign in again.', 'error');
     })
@@ -4271,14 +4289,14 @@ function App() {
   };
 
   const onLogin = (userData, token) => {
-    accountSessionRef.current = { token, accountId:userData.id };
+    beginAccountSession(userData.id);
     setUser(storeAccountSession(userData, token));
     loadFavIds();
     notify(`Signed in as ${userData.name}.`, 'success');
   };
 
   const onLogout = () => {
-    accountSessionRef.current = { token:null, accountId:null };
+    endAccountSession();
     clearAccountSession();
     setUser(null);
     setFavIds(new Set());
@@ -4287,7 +4305,7 @@ function App() {
   };
 
   const onAccountUpdated = (updatedAccount, session) => {
-    if (!isAccountSessionCurrent(session) || localStorage.getItem('pc_token') !== session.token || updatedAccount.id !== session.accountId) return;
+    if (!isAccountSessionCurrent(session) || updatedAccount.id !== session.accountId) return;
     storeAccountSession(updatedAccount, localStorage.getItem('pc_token'));
     setUser(updatedAccount);
   };

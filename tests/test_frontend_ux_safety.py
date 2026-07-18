@@ -37,12 +37,19 @@ def test_profile_updates_ignore_stale_account_sessions_and_announce_errors():
     html = read_frontend()
     profile_source = html[html.index("function ProfilePage"):html.index("// ─── LOGIN MODAL")]
     app_source = html[html.index("function App()"):html.index("const isPublicMemberBalanceRoute")]
+    email_submit_source = profile_source[profile_source.index("const submitEmail"):profile_source.index("const submitPassword")]
+    password_submit_source = profile_source[profile_source.index("const submitPassword"):profile_source.rindex("  return (")]
+    login_source = app_source[app_source.index("const onLogin"):app_source.index("const onLogout")]
+    logout_source = app_source[app_source.index("const onLogout"):app_source.index("const onAccountUpdated")]
 
     assert "const requestSession = { ...getAccountSession() };" in profile_source
-    assert profile_source.count("if (!isAccountSessionCurrent(requestSession) || account.id !== requestSession.accountId) return;") == 2
-    assert "const accountSessionRef = useRef({ token:null, accountId:null });" in app_source
-    assert "accountSessionRef.current = { token:null, accountId:null };" in app_source
-    assert "localStorage.getItem('pc_token') !== session.token" in app_source
+    assert email_submit_source.count("if (!isAccountSessionCurrent(requestSession)) return;") >= 4
+    assert password_submit_source.count("if (!isAccountSessionCurrent(requestSession)) return;") >= 4
+    assert "const accountSessionGenerationRef = useRef(0);" in app_source
+    assert "generation: ++accountSessionGenerationRef.current" in app_source
+    assert "beginAccountSession(userData.id);" in login_source
+    assert "endAccountSession();" in logout_source
+    assert "accountSessionRef.current.generation === session.generation" in app_source
     assert "storeAccountSession(updatedAccount, localStorage.getItem('pc_token'));" in app_source
     assert 'id="profile-email-error" role="alert"' in profile_source
     assert 'aria-describedby={emailMessage ? \'profile-email-error\' : undefined}' in profile_source
