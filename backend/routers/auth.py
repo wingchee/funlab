@@ -90,6 +90,8 @@ def update_profile(
         current_user.email = email
     elif len(body.new_password) < 8:
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    elif len(body.new_password.encode("utf-8")) > 72:
+        raise HTTPException(status_code=400, detail="New password must be at most 72 bytes")
     else:
         current_user.password_hash = hash_password(body.new_password)
 

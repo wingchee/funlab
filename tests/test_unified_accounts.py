@@ -337,6 +337,24 @@ def test_profile_update_rejects_a_short_new_password(db):
     assert error.value.status_code == 400
 
 
+@pytest.mark.parametrize("new_password", ["a" * 73, "😀" * 19])
+def test_profile_update_rejects_new_passwords_over_bcrypts_byte_limit(db, new_password):
+    account = _account(db, email="account@example.com", password="current-pass")
+    password_hash_before_update = account.password_hash
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="current-pass", new_password=new_password),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 400
+    assert "72 bytes" in error.value.detail
+    assert db.get(models.User, account.id).password_hash == password_hash_before_update
+    assert verify_password("current-pass", account.password_hash)
+
+
 def test_profile_update_http_route_requires_authentication():
     app = FastAPI()
     app.include_router(auth_router.router, prefix="/api/auth")
