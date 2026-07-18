@@ -24,6 +24,7 @@ from auth import (  # noqa: E402
     get_current_user,
     get_membership_user,
     hash_password,
+    verify_password,
 )
 from routers import favorites  # noqa: E402
 from routers import auth as auth_router  # noqa: E402
@@ -216,3 +217,133 @@ def test_login_phone_namespace_wins_over_member_id(db):
     )
 
     assert result["user"]["id"] == phone_owner.id
+
+
+def test_profile_update_changes_and_normalizes_the_current_users_email(db):
+    account = _account(db, email="before@example.com", password="current-pass")
+
+    result = auth_router.update_profile(
+        schemas.ProfileUpdate(
+            current_password="current-pass", email="  AFTER@Example.COM  "
+        ),
+        current_user=account,
+        db=db,
+    )
+
+    assert result["email"] == "after@example.com"
+    assert db.get(models.User, account.id).email == "after@example.com"
+    assert "password" not in result
+    assert "password_hash" not in result
+
+
+def test_profile_update_changes_password_and_invalidates_the_old_password(db):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    result = auth_router.update_profile(
+        schemas.ProfileUpdate(current_password="current-pass", new_password="new-password"),
+        current_user=account,
+        db=db,
+    )
+
+    assert verify_password("new-password", account.password_hash)
+    assert not verify_password("current-pass", account.password_hash)
+    with pytest.raises(HTTPException) as error:
+        auth_router.login(
+            schemas.AccountLogin(identifier="account@example.com", password="current-pass"), db=db
+        )
+    assert error.value.status_code == 401
+    assert auth_router.login(
+        schemas.AccountLogin(identifier="account@example.com", password="new-password"), db=db
+    )["user"]["id"] == account.id
+    assert "password" not in result
+    assert "password_hash" not in result
+
+
+def test_profile_update_rejects_wrong_current_password(db):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="wrong-password", email="new@example.com"),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 401
+    assert error.value.detail == "Invalid current password"
+
+
+@pytest.mark.parametrize(
+    "email,new_password",
+    [("", ""), ("new@example.com", "new-password")],
+)
+def test_profile_update_requires_exactly_one_change(db, email, new_password):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(
+                current_password="current-pass", email=email, new_password=new_password
+            ),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 400
+
+
+@pytest.mark.parametrize("email", ["", "   ", "not-an-email", "missing-domain@"])
+def test_profile_update_rejects_blank_or_malformed_email(db, email):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="current-pass", email=email),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 400
+
+
+def test_profile_update_rejects_an_email_already_in_use(db, mocker):
+    account = _account(db, email="account@example.com", password="current-pass")
+    _account(db, email="taken@example.com", password="other-pass")
+    rollback = mocker.spy(db, "rollback")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="current-pass", email="TAKEN@example.com"),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail == "Email is already in use"
+    rollback.assert_called_once()
+    assert db.get(models.User, account.id).email == "account@example.com"
+
+
+def test_profile_update_rejects_a_short_new_password(db):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="current-pass", new_password="short"),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 400
+
+
+def test_profile_update_http_route_requires_authentication():
+    app = FastAPI()
+    app.include_router(auth_router.router, prefix="/api/auth")
+
+    response = TestClient(app).put(
+        "/api/auth/profile",
+        json={"current_password": "current-pass", "email": "new@example.com"},
+    )
+
+    assert response.status_code == 401
