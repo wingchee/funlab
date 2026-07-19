@@ -3081,6 +3081,9 @@ function MembershipPage({ user, onLogout }) {
   const [selectedQrUrl, setSelectedQrUrl] = useState('');
   const [packageForm, setPackageForm] = useState({ package_name:'10-hour package', hours:'10' });
   const [editForm, setEditForm] = useState({ name:'', phone:'', password:'', is_active:true, notes:'' });
+  const [visitForm, setVisitForm] = useState({ table_number:'1', checked_in_at:'', checked_out_at:'', notes:'' });
+  const [editingVisit, setEditingVisit] = useState(null);
+  const [visitEditorOpen, setVisitEditorOpen] = useState(false);
   const [promotionPhone, setPromotionPhone] = useState('');
   const [checkInTable, setCheckInTable] = useState('1');
   const [manualMemberCode, setManualMemberCode] = useState('');
@@ -3314,6 +3317,66 @@ function MembershipPage({ user, onLogout }) {
     }
     await selectMember(selected);
     setMessage('Package added.');
+  };
+
+  const toDateTimeLocalValue = value => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const local = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+    return local.toISOString().slice(0, 16);
+  };
+
+  const openVisitEditor = visit => {
+    if (visit) {
+      setEditingVisit(visit);
+      setVisitForm({
+        table_number:String(visit.table_number || 1),
+        checked_in_at:toDateTimeLocalValue(visit.checked_in_at),
+        checked_out_at:toDateTimeLocalValue(visit.checked_out_at),
+        notes:visit.notes || '',
+      });
+    } else {
+      const checkedIn = new Date();
+      const checkedOut = new Date(checkedIn.getTime() + (60 * 60 * 1000));
+      setEditingVisit(null);
+      setVisitForm({
+        table_number:checkInTable || '1',
+        checked_in_at:toDateTimeLocalValue(checkedIn),
+        checked_out_at:toDateTimeLocalValue(checkedOut),
+        notes:'',
+      });
+    }
+    setVisitEditorOpen(true);
+  };
+
+  const saveVisit = async () => {
+    if (!selected || !visitForm.checked_in_at || !visitForm.checked_out_at) {
+      setMessage('Check-in and check-out times are required.');
+      return;
+    }
+    const path = editingVisit
+      ? `/members/${selected.id}/visits/${editingVisit.id}`
+      : `/members/${selected.id}/visits`;
+    const res = await apiFetch(path, {
+      method:editingVisit ? 'PUT' : 'POST',
+      body:JSON.stringify({
+        table_number:Number(visitForm.table_number),
+        checked_in_at:visitForm.checked_in_at,
+        checked_out_at:visitForm.checked_out_at,
+        notes:visitForm.notes,
+      }),
+    });
+    if (!res?.ok) {
+      let detail = 'Unable to save check-in record.';
+      try { detail = (await res.json())?.detail || detail; } catch (_) {}
+      setMessage(detail);
+      return;
+    }
+    await selectMember(selected);
+    setVisitEditorOpen(false);
+    setEditingVisit(null);
+    setMessage(editingVisit ? 'Check-in record updated.' : 'Check-in record added.');
   };
 
   const checkInMember = async () => {
@@ -3569,14 +3632,35 @@ function MembershipPage({ user, onLogout }) {
                   </div>
 
                   <div>
-                    <h3 style={{fontSize:16,fontWeight:800,marginBottom:10}}>Visit History and Check-in Records</h3>
+                    <div style={{display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',marginBottom:10}}>
+                      <h3 style={{fontSize:16,fontWeight:800,margin:0}}>Visit History and Check-in Records</h3>
+                      <button onClick={() => openVisitEditor(null)} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'8px 10px',fontWeight:800,fontFamily:'inherit',cursor:'pointer',fontSize:12}}>Add Check-in Record</button>
+                    </div>
+                    {visitEditorOpen && <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:12,marginBottom:10,display:'grid',gap:8}}>
+                      <div style={{fontSize:12,fontWeight:800,color:'#555'}}>{editingVisit ? 'Edit Check-in Record' : 'Add Check-in Record'}</div>
+                      <select value={visitForm.table_number} onChange={e=>setVisitForm(prev=>({...prev,table_number:e.target.value}))} style={inputStyle}>
+                        {Array.from({length:14}, (_,i)=>i+1).map(number => <option key={number} value={number}>Table {number}</option>)}
+                      </select>
+                      <input aria-label="Check-in time" value={visitForm.checked_in_at} onChange={e=>setVisitForm(prev=>({...prev,checked_in_at:e.target.value}))} type="datetime-local" style={inputStyle}/>
+                      <input aria-label="Check-out time" value={visitForm.checked_out_at} onChange={e=>setVisitForm(prev=>({...prev,checked_out_at:e.target.value}))} type="datetime-local" style={inputStyle}/>
+                      <textarea value={visitForm.notes} onChange={e=>setVisitForm(prev=>({...prev,notes:e.target.value}))} placeholder="Staff note (optional)" rows="2" style={{...inputStyle,resize:'vertical'}}/>
+                      <div style={{display:'flex',gap:8}}>
+                        <button onClick={saveVisit} style={{background:'#1A1A18',color:'#fff',border:'none',borderRadius:8,padding:'9px 11px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>{editingVisit ? 'Save Record' : 'Add Record'}</button>
+                        <button onClick={() => { setVisitEditorOpen(false); setEditingVisit(null); }} style={{background:'#fff',color:'#555',border:'1px solid #E8E6E1',borderRadius:8,padding:'9px 11px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Cancel</button>
+                      </div>
+                      <div style={{fontSize:11,color:'#888'}}>Manual records are charged using the normal table rate and apply available package hours.</div>
+                    </div>}
                     <div style={{display:'grid',gap:8,maxHeight:260,overflow:'auto'}}>
                       {(selected.visits || []).length === 0 && <div style={{fontSize:13,color:'#999'}}>No visits yet.</div>}
                       {(selected.visits || []).map(visit => (
                         <div key={visit.id} style={{borderTop:'1px solid #F0EDEA',paddingTop:10}}>
-                          <div style={{fontWeight:800}}>Table {visit.table_number}</div>
+                          <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}>
+                            <div style={{fontWeight:800}}>Table {visit.table_number}</div>
+                            {visit.is_manual && <button onClick={() => openVisitEditor(visit)} style={{background:'#fff',color:'#555',border:'1px solid #E8E6E1',borderRadius:7,padding:'5px 8px',fontWeight:800,fontFamily:'inherit',cursor:'pointer',fontSize:11}}>Edit Check-in Record</button>}
+                          </div>
                           <div style={{fontSize:12,color:'#777'}}>{formatDateTime(visit.checked_in_at)} to {formatDateTime(visit.checked_out_at)}</div>
                           <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:T.accentRed}}>Charged {formatDuration(visit.charged_seconds)} · Deducted {formatDuration(visit.package_deducted_seconds)}</div>
+                          {visit.notes && <div style={{fontSize:12,color:'#777',marginTop:3}}>{visit.notes}</div>}
                           {visit.extra_due_seconds > 0 && <div style={{fontSize:12,color:'#B45309',fontWeight:800}}>Extra due {formatDuration(visit.extra_due_seconds)}</div>}
                         </div>
                       ))}

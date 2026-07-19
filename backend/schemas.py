@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 from typing import List, Any, Optional
 
@@ -71,3 +73,14 @@ class MemberPackageUpdate(BaseModel):
     remaining_seconds: Optional[int] = None
     total_seconds: Optional[int] = None
     notes: str = ""
+
+
+class MemberVisitCreate(BaseModel):
+    table_number: int
+    checked_in_at: datetime
+    checked_out_at: datetime
+    notes: str = ""
+
+
+class MemberVisitUpdate(MemberVisitCreate):
+    pass
