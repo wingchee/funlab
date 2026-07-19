@@ -67,6 +67,7 @@ def serialize_visit(visit: models.MemberVisit) -> dict:
         "id": visit.id,
         "member_id": visit.member_id,
         "table_time_log_id": visit.table_time_log_id,
+        "is_manual": visit.table_time_log_id is None,
         "table_number": visit.table_number,
         "checked_in_at": visit.checked_in_at.isoformat(),
         "checked_out_at": visit.checked_out_at.isoformat(),
@@ -345,6 +346,33 @@ def deduct_member_seconds(db: Session, member: models.User, charged_seconds: int
     return {"deducted_seconds": deducted, "extra_due_seconds": remaining_charge}
 
 
+def restore_member_seconds(db: Session, member: models.User, seconds: int) -> int:
+    remaining_restore = max(0, int(seconds or 0))
+    restored = 0
+    if remaining_restore == 0:
+        return restored
+
+    packages = (
+        db.query(models.MemberPackage)
+        .filter(models.MemberPackage.member_id == member.id)
+        .order_by(models.MemberPackage.purchased_at.desc(), models.MemberPackage.id.desc())
+        .with_for_update()
+        .all()
+    )
+    for package in packages:
+        if remaining_restore <= 0:
+            break
+        current = max(0, int(package.remaining_seconds or 0))
+        capacity = max(0, int(package.total_seconds or 0) - current)
+        restore_seconds = min(capacity, remaining_restore)
+        package.remaining_seconds = current + restore_seconds
+        remaining_restore -= restore_seconds
+        restored += restore_seconds
+
+    db.flush()
+    return restored
+
+
 def find_member_by_code(db: Session, member_code: str) -> Optional[models.User]:
     code = (member_code or "").strip()
     if not code:
@@ -572,6 +600,38 @@ def admin_remove_membership(
     }
 
 
+@router.delete("/{member_id}")
+def admin_delete_member(
+    member_id: int,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    member = db.query(models.User).filter(
+        models.User.id == member_id,
+        models.User.member_code.is_not(None),
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if member.is_admin:
+        raise HTTPException(
+            status_code=409,
+            detail="Administrator accounts cannot be deleted as members",
+        )
+
+    conflicts = _membership_removal_conflicts(db, member.id)
+    if conflicts:
+        raise HTTPException(
+            status_code=409,
+            detail="Member cannot be deleted while retained references exist: "
+            + ", ".join(conflicts),
+        )
+
+    deleted_member_id = member.id
+    db.delete(member)
+    db.commit()
+    return {"id": deleted_member_id, "deleted": True}
+
+
 @router.put("/{member_id}")
 def admin_update_member(
     member_id: int,
@@ -686,6 +746,120 @@ def admin_member_visits(
         serialize_visit(visit)
         for visit in sorted(member.visits, key=lambda row: row.checked_out_at, reverse=True)
     ]
+
+
+def _manual_visit_values(body: schemas.MemberVisitCreate) -> tuple[int, datetime, datetime, int, str]:
+    table_number = int(body.table_number)
+    if not 1 <= table_number <= 14:
+        raise HTTPException(status_code=400, detail="Table number must be between 1 and 14")
+    if body.checked_out_at <= body.checked_in_at:
+        raise HTTPException(status_code=400, detail="Check-out time must be after check-in time")
+    occupied_seconds = int((body.checked_out_at - body.checked_in_at).total_seconds())
+    return (
+        table_number,
+        body.checked_in_at,
+        body.checked_out_at,
+        occupied_seconds,
+        body.notes.strip(),
+    )
+
+
+@router.post("/{member_id}/visits")
+def admin_add_member_visit(
+    member_id: int,
+    body: schemas.MemberVisitCreate,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    member = db.query(models.User).filter(
+        models.User.id == member_id,
+        models.User.member_code.is_not(None),
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    table_number, checked_in_at, checked_out_at, occupied_seconds, notes = _manual_visit_values(body)
+    from routers.timetable import calculate_charged_seconds
+
+    charged_seconds = calculate_charged_seconds(occupied_seconds)
+    deduction = deduct_member_seconds(db, member, charged_seconds)
+    visit = models.MemberVisit(
+        member_id=member.id,
+        table_number=table_number,
+        checked_in_at=checked_in_at,
+        checked_out_at=checked_out_at,
+        occupied_seconds=occupied_seconds,
+        charged_seconds=charged_seconds,
+        package_deducted_seconds=deduction["deducted_seconds"],
+        extra_due_seconds=deduction["extra_due_seconds"],
+        notes=notes,
+    )
+    db.add(visit)
+    db.commit()
+    db.refresh(visit)
+    return serialize_visit(visit)
+
+
+@router.put("/{member_id}/visits/{visit_id}")
+def admin_update_member_visit(
+    member_id: int,
+    visit_id: int,
+    body: schemas.MemberVisitUpdate,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    visit = (
+        db.query(models.MemberVisit)
+        .filter(
+            models.MemberVisit.id == visit_id,
+            models.MemberVisit.member_id == member_id,
+        )
+        .first()
+    )
+    if not visit:
+        raise HTTPException(status_code=404, detail="Visit not found")
+    if visit.table_time_log_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Timer-generated visits cannot be edited from member history",
+        )
+    table_number, checked_in_at, checked_out_at, occupied_seconds, notes = _manual_visit_values(body)
+    member = db.query(models.User).filter(models.User.id == member_id).with_for_update().first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    from routers.timetable import calculate_charged_seconds
+
+    charged_seconds = calculate_charged_seconds(occupied_seconds)
+    charge_change = charged_seconds - int(visit.charged_seconds or 0)
+    package_deducted_seconds = int(visit.package_deducted_seconds or 0)
+    extra_due_seconds = int(visit.extra_due_seconds or 0)
+    if charge_change > 0:
+        deduction = deduct_member_seconds(db, member, charge_change)
+        package_deducted_seconds += deduction["deducted_seconds"]
+        extra_due_seconds += deduction["extra_due_seconds"]
+    elif charge_change < 0:
+        credit_seconds = -charge_change
+        extra_due_reduction = min(extra_due_seconds, credit_seconds)
+        extra_due_seconds -= extra_due_reduction
+        credit_seconds -= extra_due_reduction
+        restored_seconds = restore_member_seconds(db, member, credit_seconds)
+        if restored_seconds != credit_seconds:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Unable to restore the member's package balance for this edit",
+            )
+        package_deducted_seconds -= restored_seconds
+    visit.table_number = table_number
+    visit.checked_in_at = checked_in_at
+    visit.checked_out_at = checked_out_at
+    visit.occupied_seconds = occupied_seconds
+    visit.charged_seconds = charged_seconds
+    visit.package_deducted_seconds = package_deducted_seconds
+    visit.extra_due_seconds = extra_due_seconds
+    visit.notes = notes
+    db.commit()
+    db.refresh(visit)
+    return serialize_visit(visit)
 
 
 @router.get("/{member_id}/qr")

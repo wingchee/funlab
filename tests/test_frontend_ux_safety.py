@@ -173,6 +173,19 @@ def test_staff_ui_can_promote_and_safely_remove_membership_capability():
     assert 'placeholder="Name, phone, or Member ID"' in html
 
 
+def test_staff_ui_can_add_and_edit_manual_member_check_in_history():
+    html = read_frontend()
+    membership_source = html[
+        html.index("function MembershipPage({ user, onLogout })"):
+        html.index("function MemberPortalPage(")
+    ]
+
+    assert "Add Check-in Record" in membership_source
+    assert "Edit Check-in Record" in membership_source
+    assert "`/members/${selected.id}/visits`" in membership_source
+    assert "`/members/${selected.id}/visits/${editingVisit.id}`" in membership_source
+
+
 def test_membership_page_hides_email_from_staff_workflows():
     html = read_frontend()
     membership_source = html[

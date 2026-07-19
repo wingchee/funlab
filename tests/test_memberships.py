@@ -435,6 +435,80 @@ class MembershipTests(unittest.TestCase):
         db.refresh(member)
         self.assertIsNotNone(member.member_code)
 
+    def test_staff_can_delete_unreferenced_non_admin_member(self):
+        db = self._session()
+        memberships = self._memberships()
+        member = self._member(db, phone="60123456790")
+
+        deleted = memberships.admin_delete_member(member.id, _=None, db=db)
+
+        self.assertEqual(deleted, {"id": member.id, "deleted": True})
+        self.assertIsNone(db.query(models.User).filter_by(id=member.id).first())
+
+    def test_staff_cannot_delete_member_with_retained_references(self):
+        db = self._session()
+        memberships = self._memberships()
+        member = self._member(db, phone="60123456791")
+        memberships.add_package_record(db, member, "Hours", 3600)
+
+        with self.assertRaises(HTTPException) as raised:
+            memberships.admin_delete_member(member.id, _=None, db=db)
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("package", raised.exception.detail.lower())
+        self.assertIsNotNone(db.query(models.User).filter_by(id=member.id).first())
+
+    def test_staff_can_add_and_edit_manual_member_check_in_history(self):
+        db = self._session()
+        memberships = self._memberships()
+        member = self._member(db, phone="60123456792")
+        package = memberships.add_package_record(db, member, "Three Hours", 3 * 60 * 60)
+        checked_in_at = datetime(2026, 5, 3, 12, 0, 0)
+        checked_out_at = checked_in_at + timedelta(minutes=75)
+
+        created = memberships.admin_add_member_visit(
+            member.id,
+            schemas.MemberVisitCreate(
+                table_number=3,
+                checked_in_at=checked_in_at,
+                checked_out_at=checked_out_at,
+                notes="Walk-in attendance",
+            ),
+            _=None,
+            db=db,
+        )
+
+        self.assertTrue(created["is_manual"])
+        self.assertEqual(created["occupied_seconds"], 75 * 60)
+        self.assertEqual(created["charged_seconds"], 90 * 60)
+        self.assertEqual(created["package_deducted_seconds"], 90 * 60)
+        self.assertEqual(created["extra_due_seconds"], 0)
+        self.assertEqual(created["notes"], "Walk-in attendance")
+        db.refresh(package)
+        self.assertEqual(package.remaining_seconds, 90 * 60)
+
+        updated = memberships.admin_update_member_visit(
+            member.id,
+            created["id"],
+            schemas.MemberVisitUpdate(
+                table_number=4,
+                checked_in_at=checked_in_at + timedelta(minutes=15),
+                checked_out_at=checked_in_at + timedelta(minutes=75),
+                notes="Corrected table",
+            ),
+            _=None,
+            db=db,
+        )
+
+        self.assertEqual(updated["table_number"], 4)
+        self.assertEqual(updated["occupied_seconds"], 60 * 60)
+        self.assertEqual(updated["charged_seconds"], 60 * 60)
+        self.assertEqual(updated["package_deducted_seconds"], 60 * 60)
+        self.assertEqual(updated["extra_due_seconds"], 0)
+        self.assertEqual(updated["notes"], "Corrected table")
+        db.refresh(package)
+        self.assertEqual(package.remaining_seconds, 2 * 60 * 60)
+
     def test_member_self_service_operations_use_membership_capable_user(self):
         db = self._session()
         memberships = self._memberships()
