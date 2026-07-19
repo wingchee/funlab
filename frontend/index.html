@@ -668,7 +668,7 @@ const API_BASE = '/api';
 async function apiFetch(path, options = {}) {
   const token = localStorage.getItem('pc_token');
   const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token && !path.startsWith('/members/public/')) headers['Authorization'] = `Bearer ${token}`;
   if (options.body && typeof options.body === 'string') {
     headers['Content-Type'] = 'application/json';
   }
@@ -1045,6 +1045,11 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout, onMobileMenuClick
     onLogout();
   };
 
+  const openProfile = () => {
+    setAccountMenuOpen(false);
+    setPage('profile');
+  };
+
   return (
     <nav className="top-nav" style={{
       position:'sticky',top:0,zIndex:100,
@@ -1112,6 +1117,9 @@ function Navbar({ page, setPage, user, onLoginClick, onLogout, onMobileMenuClick
                     <span>{user.email}</span>
                     <span>{isAdmin ? 'Administrator' : 'Member'}</span>
                   </div>
+                  <button className="account-menu-action" type="button" role="menuitem" onClick={openProfile}>
+                    <span>Profile</span><span aria-hidden="true">→</span>
+                  </button>
                   <button className="account-menu-action" type="button" role="menuitem" onClick={signOut}>
                     <span>Sign out</span><span aria-hidden="true">→</span>
                   </button>
@@ -1196,6 +1204,7 @@ function MobileNavDrawer({ page, setPage, user, onLoginClick, onLogout, open, on
                   <span>{isAdmin ? 'Admin account' : 'Member account'}</span>
                 </div>
               </div>
+              <button className="btn btn-secondary" type="button" onClick={() => goToPage('profile')}>Profile</button>
               <button className="btn btn-secondary" type="button" onClick={logout}>Sign Out</button>
             </>
           ) : (
@@ -3005,10 +3014,71 @@ function AdminPage({ onPatternPublished }) {
   );
 }
 
+function AddMemberPage({ onCreated, onCancel }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const inputStyle = {
+    width:'100%',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 12px',
+    fontSize:13,fontFamily:'inherit',outline:'none',background:'#fff'
+  };
+
+  const submit = async event => {
+    event.preventDefault();
+    if (!name.trim() || !phone.trim()) {
+      setError('Name and phone are required.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await apiFetch('/members', {
+        method:'POST',
+        body:JSON.stringify({ name: name.trim(), phone: phone.trim() }),
+      });
+      if (!res?.ok) {
+        try { setError((await res?.json())?.detail || 'Unable to create member.'); } catch (_) { setError('Unable to create member.'); }
+        return;
+      }
+      onCreated(await res.json());
+    } catch (_) {
+      setError('Unable to create member.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="page-shell pixel-bg">
+      <div className="page-inner" style={{maxWidth:700}}>
+        <div className="page-header" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:18,flexWrap:'wrap'}}>
+          <div>
+            <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'0',marginBottom:8}}>Add Member</h1>
+            <p style={{color:'#888',fontSize:15}}>Create a member record with the details needed for check-ins and balance access.</p>
+          </div>
+          <button type="button" onClick={onCancel} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Back to dashboard</button>
+        </div>
+        <form onSubmit={submit} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22,display:'grid',gap:14}}>
+          <div>
+            <label htmlFor="new-member-name" style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Name</label>
+            <input id="new-member-name" value={name} onChange={event=>setName(event.target.value)} autoComplete="name" style={inputStyle}/>
+          </div>
+          <div>
+            <label htmlFor="new-member-phone" style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Phone</label>
+            <input id="new-member-phone" value={phone} onChange={event=>setPhone(event.target.value)} placeholder="+61 412 345 678" type="tel" autoComplete="tel" style={inputStyle}/>
+          </div>
+          {error && <div role="status" style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#991B1B'}}>{error}</div>}
+          <button type="submit" disabled={loading} style={{background:loading?'#E8E6E1':T.accentRed,color:loading?'#888':'#fff',border:'none',borderRadius:8,padding:'11px 14px',fontWeight:800,fontFamily:'inherit',cursor:loading?'default':'pointer'}}>{loading ? 'Creating…' : 'Create Member'}</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── MEMBERSHIP DASHBOARD ─────────────────────────────────────────────────────
 function MembershipPage({ user, onLogout }) {
   const isAdmin = !!user?.is_admin;
-  const [membershipMode, setMembershipMode] = useState(isAdmin ? 'staff' : 'member');
   const [query, setQuery] = useState('');
   const [members, setMembers] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -3019,16 +3089,14 @@ function MembershipPage({ user, onLogout }) {
   const [scanning, setScanning] = useState(false);
   const [selectedQrUrl, setSelectedQrUrl] = useState('');
   const [packageForm, setPackageForm] = useState({ package_name:'10-hour package', hours:'10' });
-  const [editForm, setEditForm] = useState({ email:'', name:'', phone:'', password:'', is_active:true, notes:'' });
+  const [editForm, setEditForm] = useState({ name:'', phone:'', password:'', is_active:true, notes:'' });
   const [promotionPhone, setPromotionPhone] = useState('');
   const [checkInTable, setCheckInTable] = useState('1');
   const [manualMemberCode, setManualMemberCode] = useState('');
+  const [staffView, setStaffView] = useState('dashboard');
   const videoRef = useRef(null);
   const scanCanvasRef = useRef(null);
-
-  useEffect(() => {
-    if (!isAdmin) setMembershipMode('member');
-  }, [isAdmin]);
+  const balanceQrUrlRef = useRef('');
 
   const inputStyle = {
     width:'100%',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 12px',
@@ -3049,6 +3117,15 @@ function MembershipPage({ user, onLogout }) {
       setSelected(member);
     }
   }, []);
+
+  const replaceBalanceQrUrl = useCallback(nextUrl => {
+    if (balanceQrUrlRef.current && balanceQrUrlRef.current !== nextUrl) {
+      URL.revokeObjectURL(balanceQrUrlRef.current);
+    }
+    balanceQrUrlRef.current = nextUrl;
+  }, []);
+
+  useEffect(() => () => replaceBalanceQrUrl(''), [replaceBalanceQrUrl]);
 
   const search = useCallback(async (term = '') => {
     if (!isAdmin) return;
@@ -3094,7 +3171,6 @@ function MembershipPage({ user, onLogout }) {
   useEffect(() => {
     if (!selected) return;
     setEditForm({
-      email:selected.email || '',
       name:selected.name || '',
       phone:selected.phone || '',
       password:'',
@@ -3102,7 +3178,7 @@ function MembershipPage({ user, onLogout }) {
       notes:selected.notes || '',
     });
     setPromotionPhone(selected.phone || '');
-  }, [selected?.id, selected?.email, selected?.name, selected?.phone, selected?.is_active, selected?.notes]);
+  }, [selected?.id, selected?.name, selected?.phone, selected?.is_active, selected?.notes]);
 
   const saveMember = async () => {
     if (!selected) return;
@@ -3113,7 +3189,6 @@ function MembershipPage({ user, onLogout }) {
     const res = await apiFetch(`/members/${selected.id}`, {
       method:'PUT',
       body:JSON.stringify({
-        email:editForm.email,
         name:editForm.name,
         phone:editForm.phone,
         password:editForm.password,
@@ -3167,6 +3242,65 @@ function MembershipPage({ user, onLogout }) {
     setMembers(prev => prev.map(account => account.id === updated.id ? {...account,...updated} : account));
     setSelected(prev => ({...prev,...updated,packages:[],visits:[]}));
     setMessage('Membership capability removed. The account and administrator access remain active.');
+  };
+
+  const createMember = created => {
+    setMembers(prev => [created, ...prev.filter(member => member.id !== created.id)]);
+    setSelected(created);
+    setStaffView('dashboard');
+    setMessage('Member created. Their balance link is ready to share.');
+  };
+
+  const copyBalanceLink = async () => {
+    const balanceLink = selected?.balance_access_token
+      ? window.location.origin + '/member/' + selected.balance_access_token
+      : '';
+    if (!balanceLink) {
+      setMessage('Regenerate the balance link before copying it.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(balanceLink);
+      setMessage('Balance link copied.');
+    } catch (_) {
+      setMessage('Unable to copy the balance link.');
+    }
+  };
+
+  const downloadBalanceQr = async () => {
+    if (!selected?.id || !selected?.balance_access_token) {
+      setMessage('Regenerate the balance link before downloading its QR code.');
+      return;
+    }
+    const res = await apiFetch(`/members/${selected.id}/balance-qr?origin=${encodeURIComponent(window.location.origin)}`);
+    if (!res?.ok) {
+      setMessage('Unable to create the balance QR code.');
+      return;
+    }
+    const nextUrl = URL.createObjectURL(await res.blob());
+    replaceBalanceQrUrl(nextUrl);
+    const download = document.createElement('a');
+    download.href = nextUrl;
+    download.download = `${selected.member_code || 'member'}-balance-qr.png`;
+    document.body.appendChild(download);
+    download.click();
+    download.remove();
+    setMessage('Balance QR download started.');
+  };
+
+  const regenerateBalanceLink = async () => {
+    if (!selected?.id || !window.confirm('Regenerate this private balance link? The previous link will stop working.')) return;
+    const res = await apiFetch(`/members/${selected.id}/balance-link/regenerate`, { method:'POST' });
+    if (!res?.ok) {
+      setMessage('Unable to regenerate the balance link.');
+      return;
+    }
+    const link = await res.json();
+    const updated = { ...selected, ...link };
+    replaceBalanceQrUrl('');
+    setSelected(updated);
+    setMembers(prev => prev.map(member => member.id === updated.id ? { ...member, ...updated } : member));
+    setMessage('Balance link regenerated. The previous link no longer works.');
   };
 
   const addPackage = async () => {
@@ -3279,35 +3413,11 @@ function MembershipPage({ user, onLogout }) {
   };
 
   if (!isAdmin) {
-    return (
-      <MemberPortalPage user={user} onLogout={onLogout}/>
-    );
+    return <MemberPortalPage user={user} onLogout={onLogout}/>;
   }
 
-  if (membershipMode === 'member') {
-    return (
-      <div className="page-shell pixel-bg">
-        <div className="page-inner">
-          <div className="page-header" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:18,flexWrap:'wrap'}}>
-            <div>
-              <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'0',marginBottom:8}}>Membership</h1>
-              <p style={{color:'#888',fontSize:15}}>Switch between staff membership operations and the member-facing portal.</p>
-            </div>
-            <div style={{display:'flex',gap:8,background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:4}}>
-              {[
-                ['staff', 'Staff Dashboard'],
-                ['member', 'Member Portal'],
-              ].map(([id, label]) => (
-                <button key={id} onClick={() => setMembershipMode(id)} style={{background:membershipMode===id?T.accentRed:'transparent',color:membershipMode===id?'#fff':'#555',border:'none',borderRadius:6,padding:'9px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <MemberPortalPage user={user} onLogout={onLogout} embedded/>
-        </div>
-      </div>
-    );
+  if (staffView === 'add-member') {
+    return <AddMemberPage onCreated={createMember} onCancel={() => setStaffView('dashboard')}/>;
   }
 
   return (
@@ -3319,19 +3429,10 @@ function MembershipPage({ user, onLogout }) {
             <p style={{color:'#888',fontSize:15}}>Search members, scan QR codes, add packages, and check members into tables.</p>
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <button onClick={() => setStaffView('add-member')} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Add Member</button>
             <button onClick={() => search('')} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
               {loading ? 'Loading' : 'Refresh'}
             </button>
-            <div style={{display:'flex',gap:8,background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:4}}>
-              {[
-                ['staff', 'Staff Dashboard'],
-                ['member', 'Member Portal'],
-              ].map(([id, label]) => (
-                <button key={id} onClick={() => setMembershipMode(id)} style={{background:membershipMode===id?T.accentRed:'transparent',color:membershipMode===id?'#fff':'#555',border:'none',borderRadius:6,padding:'9px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>
-                  {label}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -3342,7 +3443,7 @@ function MembershipPage({ user, onLogout }) {
             <div style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:18}}>
               <div style={{fontSize:12,letterSpacing:'.08em',textTransform:'uppercase',color:'#aaa',fontWeight:800,marginBottom:12}}>Find Member</div>
               <div style={{display:'flex',gap:8,marginBottom:12}}>
-                <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&search(query)} placeholder="Name, email, phone, or Member ID" style={inputStyle}/>
+                <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&search(query)} placeholder="Name, phone, or Member ID" style={inputStyle}/>
                 <button onClick={() => search(query)} style={{background:T.accentRed,color:'#fff',border:'none',borderRadius:8,padding:'0 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Search</button>
               </div>
               <label style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Manual Member ID</label>
@@ -3372,7 +3473,7 @@ function MembershipPage({ user, onLogout }) {
                   border:'1px solid #F0EDEA',borderRadius:8,padding:12,marginBottom:8,cursor:'pointer',fontFamily:'inherit'
                 }}>
                   <div style={{fontWeight:800,color:'#1A1A18'}}>{member.name}</div>
-                  <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:'#777',marginTop:3}}>{member.member_code ? `${member.member_code} · ${member.phone}` : member.email}</div>
+                  <div style={{fontFamily:'Space Mono,monospace',fontSize:12,color:'#777',marginTop:3}}>{member.member_code ? `${member.member_code} · ${member.phone}` : 'Account only'}</div>
                   <div style={{fontSize:12,color:T.accentRed,fontWeight:800,marginTop:4}}>{member.member_code ? `${formatHours(member.remaining_seconds)} remaining` : 'Account only · promotion available'}</div>
                 </button>
               ))}
@@ -3388,7 +3489,6 @@ function MembershipPage({ user, onLogout }) {
                   <div>
                     <h2 style={{fontSize:28,fontWeight:800,marginBottom:5}}>{selected.name}</h2>
                     <div style={{fontFamily:'Space Mono,monospace',color:'#666',fontWeight:700}}>{selected.member_code || 'Account only'}</div>
-                    {selected.email && <div style={{color:'#777',fontSize:13,marginTop:4}}>{selected.email}</div>}
                     {selected.phone && <div style={{color:'#777',fontSize:13,marginTop:4}}>{selected.phone}</div>}
                   </div>
                   <div style={{background:`${T.accentRed}12`,border:`1px solid ${T.accentRed}30`,borderRadius:8,padding:'12px 14px',minWidth:150}}>
@@ -3398,6 +3498,15 @@ function MembershipPage({ user, onLogout }) {
                 </div>
 
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))',gap:14,marginBottom:18}}>
+                  {selected.member_code && <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
+                    <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Public Balance Link</div>
+                    <input readOnly value={selected.balance_access_token ? window.location.origin + '/member/' + selected.balance_access_token : ''} placeholder="Regenerate to create a balance link" style={{...inputStyle,marginBottom:8,fontFamily:'Space Mono,monospace',fontSize:11}}/>
+                    <div style={{display:'grid',gap:8}}>
+                      <button onClick={copyBalanceLink} disabled={!selected.balance_access_token} style={{background:selected.balance_access_token?'#1A1A18':'#E8E6E1',color:selected.balance_access_token?'#fff':'#888',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:selected.balance_access_token?'pointer':'default'}}>Copy Link</button>
+                      <button onClick={downloadBalanceQr} disabled={!selected.balance_access_token} style={{background:selected.balance_access_token?T.accentOrange:'#E8E6E1',color:selected.balance_access_token?'#fff':'#888',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:selected.balance_access_token?'pointer':'default'}}>Download QR</button>
+                      <button onClick={regenerateBalanceLink} style={{background:'#fff',color:'#B45309',border:'1px solid #F2C47F',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Regenerate Link</button>
+                    </div>
+                  </div>}
                   {!selected.member_code ? (
                   <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
                     <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Add Membership Capability</div>
@@ -3409,7 +3518,6 @@ function MembershipPage({ user, onLogout }) {
                   ) : <div style={{border:'1px solid #F0EDEA',borderRadius:8,padding:14}}>
                     <div style={{fontSize:12,fontWeight:800,color:'#555',marginBottom:10}}>Member Profile</div>
                     <div style={{display:'grid',gap:8}}>
-                      <input value={editForm.email} onChange={e=>setEditForm(prev=>({...prev,email:e.target.value}))} placeholder="Email" type="email" style={inputStyle}/>
                       <input value={editForm.name} onChange={e=>setEditForm(prev=>({...prev,name:e.target.value}))} placeholder="Name" style={inputStyle}/>
                       <input value={editForm.phone} onChange={e=>setEditForm(prev=>({...prev,phone:e.target.value}))} placeholder="+61 412 345 678" type="tel" style={inputStyle}/>
                       <input value={editForm.password} onChange={e=>setEditForm(prev=>({...prev,password:e.target.value}))} placeholder="New password (optional)" type="password" style={inputStyle}/>
@@ -3585,7 +3693,7 @@ function MemberPortalPage({ user, embedded = false, onLogout } = {}) {
       return (
         <section style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22}}>
           <h2 style={{fontSize:22,fontWeight:800,marginBottom:10}}>Sign in to view Membership</h2>
-          <p style={{color:'#777',lineHeight:1.7}}>Use the Member Sign In button in the site header to sign in or create an account.</p>
+          <p style={{color:'#777',lineHeight:1.7}}>Use the Member Sign In button in the site header to sign in to your existing account.</p>
         </section>
       );
     }
@@ -3679,10 +3787,245 @@ function MemberPortalPage({ user, embedded = false, onLogout } = {}) {
   );
 }
 
+function PublicMemberBalancePage({ token }) {
+  const [member, setMember] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const loadBalance = async () => {
+      const res = await apiFetch(`/members/public/${token}`);
+      if (!active) return;
+      if (!res?.ok) {
+        setMember(null);
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      if (!active) return;
+      setMember(data);
+      setLoading(false);
+    };
+    loadBalance().catch(() => {
+      if (!active) return;
+      setMember(null);
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [token]);
+
+  return (
+    <div className="page-shell pixel-bg" style={{minHeight:'100vh',display:'flex',alignItems:'center'}}>
+      <main className="page-inner" style={{maxWidth:680,width:'100%'}}>
+        {loading ? (
+          <section role="status" style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:12,padding:28,textAlign:'center'}}><Spinner size={20}/> Loading balance…</section>
+        ) : !member ? (
+          <section role="status" style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:12,padding:28,textAlign:'center'}}>
+            <h1 style={{fontSize:24,fontWeight:800,marginBottom:8}}>Balance link unavailable</h1>
+            <p style={{color:'#777'}}>This balance link is unavailable.</p>
+          </section>
+        ) : (
+          <section style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:12,padding:28}}>
+            <h1 style={{fontSize:30,fontWeight:800,marginBottom:6}}>{member.name}</h1>
+            <div style={{fontFamily:'Space Mono,monospace',fontSize:13,fontWeight:700,color:'#666',marginBottom:20}}>Member ID: {member.member_code}</div>
+            <div style={{background:`${T.accentRed}12`,border:`1px solid ${T.accentRed}30`,borderRadius:8,padding:16,marginBottom:22}}>
+              <div style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'#B95B6B',fontWeight:800,marginBottom:5}}>Remaining Hours</div>
+              <div style={{fontFamily:'Space Mono,monospace',fontSize:30,fontWeight:800,color:T.accentRed}}>{formatHours(member.remaining_seconds)}</div>
+            </div>
+            <h2 style={{fontSize:18,fontWeight:800,marginBottom:12}}>Packages</h2>
+            <div style={{display:'grid',gap:8}}>
+              {(member.packages || []).length === 0 && <div style={{fontSize:13,color:'#999'}}>No packages yet.</div>}
+              {(member.packages || []).map((pkg, index) => (
+                <div key={`${pkg.package_name}-${index}`} style={{display:'flex',justifyContent:'space-between',gap:14,borderTop:'1px solid #F0EDEA',paddingTop:10}}>
+                  <div style={{fontWeight:800}}>{pkg.package_name}</div>
+                  <div style={{fontFamily:'Space Mono,monospace',fontWeight:800,color:T.accentRed}}>{formatHours(pkg.remaining_seconds)}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ─── PROFILE SETTINGS ─────────────────────────────────────────────────────────
+function ProfilePage({ user, notify, onAccountUpdated, getAccountSession, isAccountSessionCurrent }) {
+  const [newEmail, setNewEmail] = useState('');
+  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [emailPending, setEmailPending] = useState(false);
+  const [passwordPending, setPasswordPending] = useState(false);
+  const [emailMessage, setEmailMessage] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState('');
+
+  const inputStyle = {
+    width:'100%',border:'2px solid #e8e6e1',borderRadius:8,padding:'10px 14px',
+    fontSize:14,fontFamily:'inherit',outline:'none',background:'#fafaf8'
+  };
+  const messageStyle = { background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'8px 12px',fontSize:12,color:'#991B1B',marginTop:14 };
+  const cardStyle = { background:'#fff',border:'1px solid #E8E6E1',borderRadius:12,padding:'clamp(20px, 4vw, 30px)',boxShadow:'0 4px 18px rgba(52,48,51,0.06)' };
+
+  const showEmailError = message => {
+    setEmailMessage(message);
+    notify(message, 'error');
+  };
+  const showPasswordError = message => {
+    setPasswordMessage(message);
+    notify(message, 'error');
+  };
+  const readError = async (res, fallback) => {
+    try { return (await res.json())?.detail || fallback; } catch (_) { return fallback; }
+  };
+
+  const submitEmail = async event => {
+    event.preventDefault();
+    const email = newEmail.trim();
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      showEmailError('Enter a valid new email address.');
+      return;
+    }
+    if (email.toLowerCase() === user.email.trim().toLowerCase()) {
+      showEmailError('Your new email must be different from your current email.');
+      return;
+    }
+    if (!emailCurrentPassword) {
+      showEmailError('Enter your current password to update your email.');
+      return;
+    }
+    const requestSession = { ...getAccountSession() };
+    setEmailPending(true);
+    setEmailMessage('');
+    try {
+      const res = await apiFetch('/auth/profile', {
+        method:'PUT',
+        body:JSON.stringify({ email, current_password:emailCurrentPassword }),
+      });
+      if (!res?.ok) {
+        const message = res ? await readError(res, 'Unable to update your email.') : 'Unable to reach the server.';
+        if (!isAccountSessionCurrent(requestSession)) return;
+        showEmailError(message);
+        return;
+      }
+      const account = await res.json();
+      if (!isAccountSessionCurrent(requestSession)) return;
+      if (account.id !== requestSession.accountId) return;
+      onAccountUpdated(account, requestSession);
+      setNewEmail('');
+      setEmailCurrentPassword('');
+      notify('Email updated.', 'success');
+    } catch (error) {
+      if (!isAccountSessionCurrent(requestSession)) return;
+      showEmailError('Unable to update your email. Please try again.');
+    } finally {
+      if (!isAccountSessionCurrent(requestSession)) return;
+      setEmailPending(false);
+    }
+  };
+
+  const submitPassword = async event => {
+    event.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showPasswordError('Fill in all password fields.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      showPasswordError('Your new password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showPasswordError('Your new password and confirmation must match.');
+      return;
+    }
+    const requestSession = { ...getAccountSession() };
+    setPasswordPending(true);
+    setPasswordMessage('');
+    try {
+      const res = await apiFetch('/auth/profile', {
+        method:'PUT',
+        body:JSON.stringify({ current_password:currentPassword, new_password:newPassword }),
+      });
+      if (!res?.ok) {
+        const message = res ? await readError(res, 'Unable to update your password.') : 'Unable to reach the server.';
+        if (!isAccountSessionCurrent(requestSession)) return;
+        showPasswordError(message);
+        return;
+      }
+      const account = await res.json();
+      if (!isAccountSessionCurrent(requestSession)) return;
+      if (account.id !== requestSession.accountId) return;
+      onAccountUpdated(account, requestSession);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      notify('Password updated.', 'success');
+    } catch (error) {
+      if (!isAccountSessionCurrent(requestSession)) return;
+      showPasswordError('Unable to update your password. Please try again.');
+    } finally {
+      if (!isAccountSessionCurrent(requestSession)) return;
+      setPasswordPending(false);
+    }
+  };
+
+  return (
+    <section style={{maxWidth:760,margin:'0 auto',padding:'clamp(28px, 6vw, 64px) 20px 72px'}}>
+      <div style={{marginBottom:24}}>
+        <span style={{fontFamily:'Space Mono,monospace',fontSize:11,fontWeight:700,color:T.accentRed,letterSpacing:'.08em'}}>ACCOUNT SETTINGS</span>
+        <h1 style={{fontSize:'clamp(28px, 5vw, 40px)',letterSpacing:'-0.04em',marginTop:7}}>Profile</h1>
+        <p style={{color:'#71696C',marginTop:8}}>Update your email address or password.</p>
+      </div>
+
+      <div style={{display:'grid',gap:18}}>
+        <form onSubmit={submitEmail} style={cardStyle}>
+          <h2 style={{fontSize:19,fontWeight:800}}>Email address</h2>
+          <p style={{color:'#71696C',fontSize:13,margin:'5px 0 18px'}}>Use your current password to confirm this change.</p>
+          <div style={{display:'grid',gap:14}}>
+            <label style={{fontSize:12,fontWeight:700,color:'#555'}}>Current email
+              <input type="email" readOnly value={user.email} style={{...inputStyle,marginTop:6,color:'#777',background:'#f2f1ee',cursor:'default'}} />
+            </label>
+            <label style={{fontSize:12,fontWeight:700,color:'#555'}}>New email
+              <input type="email" value={newEmail} onChange={event => setNewEmail(event.target.value)} autoComplete="email" aria-invalid={!!emailMessage} aria-describedby={emailMessage ? 'profile-email-error' : undefined} style={{...inputStyle,marginTop:6}} />
+            </label>
+            <label style={{fontSize:12,fontWeight:700,color:'#555'}}>Current password
+              <input type="password" value={emailCurrentPassword} onChange={event => setEmailCurrentPassword(event.target.value)} autoComplete="current-password" aria-invalid={!!emailMessage} aria-describedby={emailMessage ? 'profile-email-error' : undefined} style={{...inputStyle,marginTop:6}} />
+            </label>
+          </div>
+          {emailMessage && <div id="profile-email-error" role="alert" style={messageStyle}>{emailMessage}</div>}
+          <button type="submit" disabled={emailPending} className="btn btn-primary" style={{marginTop:18,opacity:emailPending ? 0.65 : 1}}>
+            {emailPending ? 'Updating email...' : 'Update email'}
+          </button>
+        </form>
+
+        <form onSubmit={submitPassword} style={cardStyle}>
+          <h2 style={{fontSize:19,fontWeight:800}}>Password</h2>
+          <p style={{color:'#71696C',fontSize:13,margin:'5px 0 18px'}}>Choose a new password with at least 8 characters.</p>
+          <div style={{display:'grid',gap:14}}>
+            <label style={{fontSize:12,fontWeight:700,color:'#555'}}>Current password
+              <input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" aria-invalid={!!passwordMessage} aria-describedby={passwordMessage ? 'profile-password-error' : undefined} style={{...inputStyle,marginTop:6}} />
+            </label>
+            <label style={{fontSize:12,fontWeight:700,color:'#555'}}>New password
+              <input type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" aria-invalid={!!passwordMessage} aria-describedby={passwordMessage ? 'profile-password-error' : undefined} style={{...inputStyle,marginTop:6}} />
+            </label>
+            <label style={{fontSize:12,fontWeight:700,color:'#555'}}>Confirm new password
+              <input type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" aria-invalid={!!passwordMessage} aria-describedby={passwordMessage ? 'profile-password-error' : undefined} style={{...inputStyle,marginTop:6}} />
+            </label>
+          </div>
+          {passwordMessage && <div id="profile-password-error" role="alert" style={messageStyle}>{passwordMessage}</div>}
+          <button type="submit" disabled={passwordPending} className="btn btn-primary" style={{marginTop:18,opacity:passwordPending ? 0.65 : 1}}>
+            {passwordPending ? 'Updating password...' : 'Update password'}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
 // ─── LOGIN MODAL ──────────────────────────────────────────────────────────────
 function LoginModal({ onClose, onLogin }) {
-  const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ identifier:'', email:'', name:'', phone:'', password:'', passwordConfirmation:'' });
+  const [form, setForm] = useState({ identifier:'', password:'' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const firstInputRef = useRef(null);
@@ -3696,57 +4039,18 @@ function LoginModal({ onClose, onLogin }) {
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [onClose]);
 
-  useEffect(() => {
-    setError('');
-    window.setTimeout(() => firstInputRef.current?.focus(), 0);
-  }, [mode]);
-
   const readError = async (res, fallback) => {
     try { return (await res.json())?.detail || fallback; } catch (_) { return fallback; }
   };
 
   const submit = async () => {
-    if (mode === 'register') {
-      if (!form.email.trim() || !form.name.trim() || !form.phone.trim() || !form.password || !form.passwordConfirmation) {
-        setError('Please fill in all fields');
-        return;
-      }
-      if (form.password !== form.passwordConfirmation) {
-        setError('Passwords do not match');
-        return;
-      }
-    } else if (!form.identifier.trim() || !form.password) {
+    if (!form.identifier.trim() || !form.password) {
       setError('Please fill in all fields');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      if (mode === 'register') {
-        const res = await apiFetch('/auth/register', {
-          method:'POST',
-          body:JSON.stringify({
-            email:form.email,
-            name:form.name,
-            phone:form.phone,
-            password:form.password,
-            password_confirmation:form.passwordConfirmation,
-          }),
-        });
-        if (!res) {
-          setError('Cannot reach the server. Please try again.');
-          return;
-        }
-        if (!res.ok) {
-          setError(await readError(res, 'Unable to register member.'));
-          return;
-        }
-        const data = await res.json();
-        onLogin(data.user, data.access_token);
-        onClose();
-        return;
-      }
-
       const res = await apiFetch('/auth/login', {
         method:'POST',
         body:JSON.stringify({ identifier:form.identifier, password:form.password }),
@@ -3784,25 +4088,13 @@ function LoginModal({ onClose, onLogin }) {
           </div>
           <span style={{fontWeight:800,fontSize:18}}><span style={{color:'#F47A8A'}}>Fun</span><span style={{color:'#6BB5E8'}}>Lab</span> <span style={{color:'#9B8FCF',fontSize:14,fontWeight:600}}>AU</span></span>
         </div>
-        <h2 id="login-title" style={{fontSize:22,fontWeight:800,textAlign:'center',marginBottom:6}}>{mode === 'login' ? 'Welcome back' : 'Join FunLab'}</h2>
-        <p style={{color:'#777',fontSize:13,textAlign:'center',marginBottom:18}}>{mode === 'login' ? 'Sign in to your member account.' : 'Create one account for the site and Membership.'}</p>
+        <h2 id="login-title" style={{fontSize:22,fontWeight:800,textAlign:'center',marginBottom:6}}>Welcome back</h2>
+        <p style={{color:'#777',fontSize:13,textAlign:'center',marginBottom:18}}>Sign in to your account.</p>
 
-        <div style={{display:'flex',gap:8,background:'#f5f3f1',borderRadius:8,padding:4,marginBottom:20}}>
-          {[['login','Sign In'],['register','Register']].map(([id,label]) => (
-            <button key={id} type="button" onClick={()=>setMode(id)} style={{flex:1,border:'none',borderRadius:6,padding:'9px 0',background:mode===id?'#fff':'transparent',color:mode===id?T.accentRed:'#666',boxShadow:mode===id?'0 2px 8px rgba(26,26,24,0.08)':'none',fontFamily:'inherit',fontWeight:800,cursor:'pointer'}}>{label}</button>
-          ))}
-        </div>
-
-        {(mode === 'login' ? [
+        {[
           {id:'login-identifier',label:'Email, phone, or Member ID',type:'text',key:'identifier',placeholder:'you@example.com or FL00000000',autoComplete:'username'},
           {id:'login-password',label:'Password',type:'password',key:'password',placeholder:'Password',autoComplete:'current-password'},
-        ] : [
-          {id:'register-email',label:'Email',type:'email',key:'email',placeholder:'you@example.com',autoComplete:'email'},
-          {id:'register-name',label:'Name',type:'text',key:'name',placeholder:'Your name',autoComplete:'name'},
-          {id:'register-phone',label:'Phone',type:'tel',key:'phone',placeholder:'+61 412 345 678',autoComplete:'tel'},
-          {id:'register-password',label:'Password',type:'password',key:'password',placeholder:'Password',autoComplete:'new-password'},
-          {id:'register-password-confirmation',label:'Confirm password',type:'password',key:'passwordConfirmation',placeholder:'Confirm password',autoComplete:'new-password'},
-        ]).map((f,index)=>(
+        ].map((f,index)=>(
           <div key={f.label} style={{marginBottom:14}}>
             <label htmlFor={f.id} style={{display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:6}}>{f.label}</label>
             <input id={f.id} ref={index === 0 ? firstInputRef : undefined} type={f.type} value={form[f.key]} onChange={e=>setForm(prev=>({...prev,[f.key]:e.target.value}))} placeholder={f.placeholder} autoComplete={f.autoComplete}
@@ -3822,7 +4114,7 @@ function LoginModal({ onClose, onLogin }) {
           fontWeight:700,fontSize:14,cursor:loading?'default':'pointer',fontFamily:'inherit',transition:'all 0.2s',
           display:'flex',alignItems:'center',justifyContent:'center',gap:8
         }}>
-          {loading ? <><Spinner size={14}/> {mode === 'login' ? 'Signing in...' : 'Creating account...'}</> : mode === 'login' ? 'Sign In' : 'Create Membership'}
+          {loading ? <><Spinner size={14}/> Signing in...</> : 'Sign In'}
         </button>
 
       </div>
@@ -3833,7 +4125,7 @@ function LoginModal({ onClose, onLogin }) {
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function getInitialPage() {
   const queryPage = new URLSearchParams(window.location.search).get('page');
-  const allowed = new Set(['home', 'gallery', 'favorites', 'timetable', 'membership', 'admin']);
+  const allowed = new Set(['home', 'gallery', 'favorites', 'timetable', 'membership', 'profile', 'admin']);
   if (allowed.has(queryPage)) return queryPage;
   const storedPage = localStorage.getItem('pc_page');
   return allowed.has(storedPage) ? storedPage : 'home';
@@ -3850,10 +4142,25 @@ function App() {
   const [openPattern, setOpenPattern] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notification, setNotification] = useState(null);
+  const accountSessionRef = useRef({ accountId:null, generation:0 });
+  const accountSessionGenerationRef = useRef(0);
 
   const notify = useCallback((message, tone = 'info') => {
     setNotification({ id: Date.now(), message, tone });
   }, []);
+
+  const beginAccountSession = accountId => {
+    accountSessionRef.current = { accountId, generation: ++accountSessionGenerationRef.current };
+  };
+  const endAccountSession = () => {
+    accountSessionRef.current = { accountId:null, generation: ++accountSessionGenerationRef.current };
+  };
+  const getAccountSession = () => accountSessionRef.current;
+  const isAccountSessionCurrent = session => (
+    session?.accountId != null
+    && accountSessionRef.current.accountId === session.accountId
+    && accountSessionRef.current.generation === session.generation
+  );
 
   useEffect(() => {
     if (!notification) return;
@@ -3891,16 +4198,23 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('pc_token');
     if (!token) { setAuthLoading(false); return; }
+    const authGeneration = accountSessionGenerationRef.current;
     apiFetch('/auth/me').then(async res => {
       if (res?.ok) {
         const account = await res.json();
+        if (accountSessionGenerationRef.current !== authGeneration) return;
+        beginAccountSession(account.id);
         setUser(storeAccountSession(account, token));
         loadFavIds();
       } else {
+        if (accountSessionGenerationRef.current !== authGeneration) return;
+        endAccountSession();
         clearAccountSession();
         notify(res ? 'Your session expired. Please sign in again.' : 'Could not verify your session. Please sign in again.', 'error');
       }
     }).catch(() => {
+      if (accountSessionGenerationRef.current !== authGeneration) return;
+      endAccountSession();
       clearAccountSession();
       notify('Could not verify your session. Please sign in again.', 'error');
     })
@@ -3911,6 +4225,9 @@ function App() {
   useEffect(() => {
     if (!authLoading && page === 'admin' && !user?.is_admin) setPage('gallery');
   }, [authLoading, page, user?.is_admin]);
+  useEffect(() => {
+    if (!authLoading && page === 'profile' && !user) setPage('gallery');
+  }, [authLoading, page, user]);
   useEffect(() => { localStorage.setItem('pc_page', page); }, [page]);
   useEffect(() => { setMobileMenuOpen(false); }, [page]);
   useEffect(() => {
@@ -3972,17 +4289,25 @@ function App() {
   };
 
   const onLogin = (userData, token) => {
+    beginAccountSession(userData.id);
     setUser(storeAccountSession(userData, token));
     loadFavIds();
     notify(`Signed in as ${userData.name}.`, 'success');
   };
 
   const onLogout = () => {
+    endAccountSession();
     clearAccountSession();
     setUser(null);
     setFavIds(new Set());
-    if (page === 'admin') setPage('gallery');
+    if (page === 'admin' || page === 'profile') setPage('gallery');
     notify('Signed out.', 'success');
+  };
+
+  const onAccountUpdated = (updatedAccount, session) => {
+    if (!isAccountSessionCurrent(session) || updatedAccount.id !== session.accountId) return;
+    storeAccountSession(updatedAccount, localStorage.getItem('pc_token'));
+    setUser(updatedAccount);
   };
 
   if (authLoading) {
@@ -4030,6 +4355,9 @@ function App() {
       {page === 'membership' && (
         <MembershipPage user={user} onLogout={onLogout}/>
       )}
+      {page === 'profile' && user && (
+        <ProfilePage user={user} notify={notify} onAccountUpdated={onAccountUpdated} getAccountSession={getAccountSession} isAccountSessionCurrent={isAccountSessionCurrent}/>
+      )}
       {page === 'admin' && user?.is_admin && (
         <AdminPage onPatternPublished={loadPatterns}/>
       )}
@@ -4047,7 +4375,13 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+const isPublicMemberBalanceRoute = window.location.pathname.startsWith('/member/');
+const publicMemberBalanceToken = window.location.pathname.split('/').filter(Boolean).pop();
+ReactDOM.createRoot(document.getElementById('root')).render(
+  isPublicMemberBalanceRoute
+    ? <PublicMemberBalancePage token={publicMemberBalanceToken}/>
+    : <App/>
+);
 </script>
 </body>
 </html>

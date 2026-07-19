@@ -3,7 +3,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -95,23 +96,11 @@ def test_preserved_space_padded_mixed_case_email_logs_in_normalized(db):
     assert admin.email == " Admin@Example.COM "
 
 
-def test_member_registration_uses_users_bcrypt_and_unified_jwt(db):
-    result = auth_router.register(
-        schemas.MemberRegistration(
-            email=" Member@Example.com ",
-            name="Member",
-            phone="+60 12-345 6789",
-            password="member-pass",
-            password_confirmation="member-pass",
-        ),
-        db=db,
-    )
+def test_public_registration_route_returns_not_found():
+    app = FastAPI()
+    app.include_router(auth_router.router, prefix="/api/auth")
 
-    user = db.query(models.User).filter_by(email="member@example.com").one()
-    assert user.member_code.startswith("FL")
-    assert user.phone == "60123456789"
-    assert verify_password("member-pass", user.password_hash)
-    assert result["access_token"].count(".") == 2
+    assert TestClient(app).post("/api/auth/register", json={}).status_code == 404
 
 
 @pytest.mark.parametrize("identifier", ["member@example.com", "60123456789", "fl00000001"])
@@ -141,41 +130,6 @@ def test_inactive_and_wrong_password_share_generic_error(db):
             auth_router.login(body, db=db)
         assert error.value.status_code == 401
         assert error.value.detail == "Invalid credentials"
-
-
-def test_registration_rejects_duplicate_normalized_email_and_phone(db):
-    _member(db)
-    for email, phone in (
-        (" MEMBER@EXAMPLE.COM ", "60111111111"),
-        ("other@example.com", "+60 12-345 6789"),
-    ):
-        with pytest.raises(HTTPException) as error:
-            auth_router.register(
-                schemas.MemberRegistration(
-                    email=email,
-                    name="Duplicate",
-                    phone=phone,
-                    password="member-pass",
-                    password_confirmation="member-pass",
-                ),
-                db=db,
-            )
-        assert error.value.status_code == 409
-
-
-def test_registration_rejects_password_confirmation_mismatch(db):
-    with pytest.raises(HTTPException) as error:
-        auth_router.register(
-            schemas.MemberRegistration(
-                email="new@example.com",
-                name="New",
-                phone="60111111111",
-                password="one",
-                password_confirmation="two",
-            ),
-            db=db,
-        )
-    assert error.value.status_code == 400
 
 
 def test_membership_and_admin_dependencies_accept_unified_roles(db):
@@ -263,3 +217,151 @@ def test_login_phone_namespace_wins_over_member_id(db):
     )
 
     assert result["user"]["id"] == phone_owner.id
+
+
+def test_profile_update_changes_and_normalizes_the_current_users_email(db):
+    account = _account(db, email="before@example.com", password="current-pass")
+
+    result = auth_router.update_profile(
+        schemas.ProfileUpdate(
+            current_password="current-pass", email="  AFTER@Example.COM  "
+        ),
+        current_user=account,
+        db=db,
+    )
+
+    assert result["email"] == "after@example.com"
+    assert db.get(models.User, account.id).email == "after@example.com"
+    assert "password" not in result
+    assert "password_hash" not in result
+
+
+def test_profile_update_changes_password_and_invalidates_the_old_password(db):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    result = auth_router.update_profile(
+        schemas.ProfileUpdate(current_password="current-pass", new_password="new-password"),
+        current_user=account,
+        db=db,
+    )
+
+    assert verify_password("new-password", account.password_hash)
+    assert not verify_password("current-pass", account.password_hash)
+    with pytest.raises(HTTPException) as error:
+        auth_router.login(
+            schemas.AccountLogin(identifier="account@example.com", password="current-pass"), db=db
+        )
+    assert error.value.status_code == 401
+    assert auth_router.login(
+        schemas.AccountLogin(identifier="account@example.com", password="new-password"), db=db
+    )["user"]["id"] == account.id
+    assert "password" not in result
+    assert "password_hash" not in result
+
+
+def test_profile_update_rejects_wrong_current_password(db):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="wrong-password", email="new@example.com"),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 401
+    assert error.value.detail == "Invalid current password"
+
+
+@pytest.mark.parametrize(
+    "email,new_password",
+    [("", ""), ("new@example.com", "new-password")],
+)
+def test_profile_update_requires_exactly_one_change(db, email, new_password):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(
+                current_password="current-pass", email=email, new_password=new_password
+            ),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 400
+
+
+@pytest.mark.parametrize("email", ["", "   ", "not-an-email", "missing-domain@"])
+def test_profile_update_rejects_blank_or_malformed_email(db, email):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="current-pass", email=email),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 400
+
+
+def test_profile_update_rejects_an_email_already_in_use(db, mocker):
+    account = _account(db, email="account@example.com", password="current-pass")
+    _account(db, email="taken@example.com", password="other-pass")
+    rollback = mocker.spy(db, "rollback")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="current-pass", email="TAKEN@example.com"),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail == "Email is already in use"
+    rollback.assert_called_once()
+    assert db.get(models.User, account.id).email == "account@example.com"
+
+
+def test_profile_update_rejects_a_short_new_password(db):
+    account = _account(db, email="account@example.com", password="current-pass")
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="current-pass", new_password="short"),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 400
+
+
+@pytest.mark.parametrize("new_password", ["a" * 73, "😀" * 19])
+def test_profile_update_rejects_new_passwords_over_bcrypts_byte_limit(db, new_password):
+    account = _account(db, email="account@example.com", password="current-pass")
+    password_hash_before_update = account.password_hash
+
+    with pytest.raises(HTTPException) as error:
+        auth_router.update_profile(
+            schemas.ProfileUpdate(current_password="current-pass", new_password=new_password),
+            current_user=account,
+            db=db,
+        )
+
+    assert error.value.status_code == 400
+    assert "72 bytes" in error.value.detail
+    assert db.get(models.User, account.id).password_hash == password_hash_before_update
+    assert verify_password("current-pass", account.password_hash)
+
+
+def test_profile_update_http_route_requires_authentication():
+    app = FastAPI()
+    app.include_router(auth_router.router, prefix="/api/auth")
+
+    response = TestClient(app).put(
+        "/api/auth/profile",
+        json={"current_password": "current-pass", "email": "new@example.com"},
+    )
+
+    assert response.status_code == 401

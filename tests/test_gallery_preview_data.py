@@ -86,8 +86,11 @@ class GalleryPreviewDataTests(unittest.TestCase):
         self.assertIn("pdfWindow.print();", html)
         self.assertIn("onClick={downloadPatternPdf}", html)
 
-    def test_public_registration_uses_canonical_auth_router(self):
-        self.assertTrue(callable(auth_router.register))
+    def test_public_registration_is_unavailable(self):
+        source = (BACKEND / "routers" / "auth.py").read_text()
+
+        self.assertFalse(hasattr(auth_router, "register"))
+        self.assertNotIn('@router.post("/register")', source)
 
     def test_admin_gallery_delete_has_confirmation_and_reload_hook(self):
         html = (ROOT / "frontend" / "index.html").read_text()

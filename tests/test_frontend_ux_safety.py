@@ -19,6 +19,43 @@ def test_profile_avatar_opens_an_explicit_account_menu():
     assert "click to logout" not in html.lower()
 
 
+def test_profile_settings_are_scoped_to_authenticated_account_navigation():
+    html = read_frontend()
+    navbar_source = html[html.index("function Navbar"):html.index("function MobileNavDrawer")]
+    mobile_source = html[html.index("function MobileNavDrawer"):html.index("// ─── PUBLIC OFFICIAL WEBSITE")]
+    profile_source = html[html.index("function ProfilePage"):html.index("// ─── LOGIN MODAL")]
+
+    assert "function ProfilePage" in html
+    assert "apiFetch('/auth/profile'" in html
+    assert "setPage('profile')" in navbar_source
+    assert "onClick={() => goToPage('profile')}>Profile</button>" in mobile_source
+    assert 'readOnly value={user.email}' in html
+    assert "localStorage" not in profile_source
+
+
+def test_profile_updates_ignore_stale_account_sessions_and_announce_errors():
+    html = read_frontend()
+    profile_source = html[html.index("function ProfilePage"):html.index("// ─── LOGIN MODAL")]
+    app_source = html[html.index("function App()"):html.index("const isPublicMemberBalanceRoute")]
+    email_submit_source = profile_source[profile_source.index("const submitEmail"):profile_source.index("const submitPassword")]
+    password_submit_source = profile_source[profile_source.index("const submitPassword"):profile_source.rindex("  return (")]
+    login_source = app_source[app_source.index("const onLogin"):app_source.index("const onLogout")]
+    logout_source = app_source[app_source.index("const onLogout"):app_source.index("const onAccountUpdated")]
+
+    assert "const requestSession = { ...getAccountSession() };" in profile_source
+    assert email_submit_source.count("if (!isAccountSessionCurrent(requestSession)) return;") >= 4
+    assert password_submit_source.count("if (!isAccountSessionCurrent(requestSession)) return;") >= 4
+    assert "const accountSessionGenerationRef = useRef(0);" in app_source
+    assert "generation: ++accountSessionGenerationRef.current" in app_source
+    assert "beginAccountSession(userData.id);" in login_source
+    assert "endAccountSession();" in logout_source
+    assert "accountSessionRef.current.generation === session.generation" in app_source
+    assert "storeAccountSession(updatedAccount, localStorage.getItem('pc_token'));" in app_source
+    assert 'id="profile-email-error" role="alert"' in profile_source
+    assert 'aria-describedby={emailMessage ? \'profile-email-error\' : undefined}' in profile_source
+    assert 'aria-describedby={passwordMessage ? \'profile-password-error\' : undefined}' in profile_source
+
+
 def test_app_has_non_blocking_action_notifications():
     html = read_frontend()
 
@@ -64,22 +101,20 @@ def test_clickable_cards_and_upload_controls_are_keyboard_accessible():
     assert 'aria-label="Remove selected upload"' in html
 
 
-def test_member_sign_in_dialog_supports_complete_registration():
+def test_member_sign_in_dialog_is_sign_in_only():
     html = read_frontend()
 
     assert "function LoginModal({ onClose, onLogin })" in html
-    assert "const [mode, setMode] = useState('login')" in html
-    assert "passwordConfirmation" in html
-    assert "Confirm password" in html
-    assert "Passwords do not match" in html
-    assert "Create Membership" in html
+    assert "apiFetch('/auth/register'" not in html
+    assert "Create Membership" not in html
+    assert "sign in or create an account" not in html.lower()
 
 
 def test_site_uses_one_account_auth_surface_and_browser_session():
     html = read_frontend()
 
     assert "apiFetch('/auth/login'" in html
-    assert "apiFetch('/auth/register'" in html
+    assert "apiFetch('/auth/register'" not in html
     assert "'/members/login'" not in html
     assert "'/members/register'" not in html
     assert "pc_member_token" not in html
@@ -89,6 +124,22 @@ def test_site_uses_one_account_auth_surface_and_browser_session():
     assert "localStorage.setItem('pc_user', JSON.stringify(account))" in html
     assert "member_code" in html
     assert "Membership profile required" in html
+
+
+def test_staff_can_create_members_and_manage_public_balance_links():
+    html = read_frontend()
+
+    assert "function AddMemberPage" in html
+    assert "apiFetch('/members'" in html
+    assert "balance-qr?origin=" in html
+
+
+def test_public_member_balance_route_uses_an_unauthenticated_token_lookup():
+    html = read_frontend()
+
+    assert "function PublicMemberBalancePage" in html
+    assert "apiFetch(`/members/public/${token}`)" in html
+    assert "window.location.pathname.startsWith('/member/')" in html
 
 
 def test_logout_and_membership_portal_share_the_global_account():
@@ -119,7 +170,22 @@ def test_staff_ui_can_promote_and_safely_remove_membership_capability():
     assert "Remove Membership" in html
     assert "method:'POST'" in html and "`/members/${selected.id}/membership`" in html
     assert "method:'DELETE'" in html
-    assert 'placeholder="Name, email, phone, or Member ID"' in html
+    assert 'placeholder="Name, phone, or Member ID"' in html
+
+
+def test_membership_page_hides_email_from_staff_workflows():
+    html = read_frontend()
+    membership_source = html[
+        html.index("function MembershipPage({ user, onLogout })"):
+        html.index("function MemberPortalPage(")
+    ]
+
+    assert 'placeholder="Name, phone, or Member ID"' in membership_source
+    assert 'placeholder="Name, email, phone, or Member ID"' not in membership_source
+    assert 'member.email' not in membership_source
+    assert 'selected.email' not in membership_source
+    assert 'email:editForm.email' not in membership_source
+    assert 'placeholder="Email" type="email"' not in membership_source
 
 
 def test_member_portal_ignores_stale_account_responses():
@@ -146,7 +212,7 @@ def test_member_portal_revokes_latest_qr_url_on_unmount():
     assert "qrUrlRef.current = ''" in html
 
 
-def test_membership_staff_header_places_refresh_before_mode_switcher():
+def test_membership_staff_header_keeps_refresh_control():
     html = read_frontend()
     staff_header_start = html.index(
         "Search members, scan QR codes, add packages, and check members into tables."
@@ -154,14 +220,27 @@ def test_membership_staff_header_places_refresh_before_mode_switcher():
     staff_header_end = html.index("{message &&", staff_header_start)
     staff_header = html[staff_header_start:staff_header_end]
 
-    assert staff_header.index("onClick={() => search('')}") < staff_header.index(
-        "['staff', 'Staff Dashboard']"
-    )
+    assert "onClick={() => search('')}" in staff_header
+    assert "Refresh" in staff_header
+
+
+def test_admin_membership_page_does_not_embed_member_portal():
+    html = read_frontend()
+    membership_source = html[
+        html.index("function MembershipPage({ user, onLogout })"):
+        html.index("function MemberPortalPage(")
+    ]
+
+    assert "const [membershipMode" not in membership_source
+    assert "['member', 'Member Portal']" not in membership_source
+    assert "<MemberPortalPage user={user} onLogout={onLogout} embedded/>" not in membership_source
+    assert "if (!isAdmin)" in membership_source
+    assert "<MemberPortalPage user={user} onLogout={onLogout}/>" in membership_source
 
 
 def test_dedicated_phone_inputs_use_an_australian_example():
     html = read_frontend()
 
-    assert html.count('placeholder="+61 412 345 678" type="tel"') == 2
-    assert "{id:'register-phone',label:'Phone',type:'tel',key:'phone',placeholder:'+61 412 345 678'" in html
+    assert html.count('placeholder="+61 412 345 678" type="tel"') == 3
+    assert 'id="new-member-phone"' in html
     assert 'placeholder="+60 12-345 6789"' not in html
