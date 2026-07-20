@@ -279,6 +279,18 @@ class MembershipTests(unittest.TestCase):
         self.assertTrue(np.any(np.all(center > 220, axis=2)))
         self.assertTrue(np.any(np.all(image < 20, axis=2)))
 
+    def test_balance_qr_remains_decodable_for_url_safe_balance_tokens(self):
+        memberships = self._memberships()
+        value = "https://members.example/member/LAi4q0_uAQahs0n5dpMGyhSpD-g7dXaTw2ldQgDBy2M"
+
+        image = cv2.imdecode(
+            np.frombuffer(memberships._balance_qr_png_bytes(value), dtype=np.uint8),
+            cv2.IMREAD_COLOR,
+        )
+        decoded, _, _ = cv2.QRCodeDetector().detectAndDecode(image)
+
+        self.assertEqual(decoded, value)
+
     def test_balance_qr_rejects_invalid_origin(self):
         db = self._session()
         memberships = self._memberships()
@@ -435,28 +447,37 @@ class MembershipTests(unittest.TestCase):
         db.refresh(member)
         self.assertIsNotNone(member.member_code)
 
-    def test_staff_can_delete_unreferenced_non_admin_member(self):
+    def test_staff_deactivation_retains_member_and_hides_it_from_search_and_scan(self):
         db = self._session()
         memberships = self._memberships()
-        member = self._member(db, phone="60123456790")
+        member = self._member(
+            db,
+            phone="60123456790",
+            balance_access_token="private-balance-token",
+        )
 
-        deleted = memberships.admin_delete_member(member.id, _=None, db=db)
+        deactivated = memberships.admin_delete_member(member.id, _=None, db=db)
 
-        self.assertEqual(deleted, {"id": member.id, "deleted": True})
-        self.assertIsNone(db.query(models.User).filter_by(id=member.id).first())
+        self.assertEqual(deactivated, {"id": member.id, "deactivated": True, "is_active": False})
+        db.refresh(member)
+        self.assertFalse(member.is_active)
+        self.assertIsNone(member.balance_access_token)
+        self.assertIs(db.query(models.User).filter_by(id=member.id).one(), member)
+        self.assertNotIn(member.id, [result.id for result in memberships.search_members(db, "")])
+        self.assertNotIn(member.id, [result.id for result in memberships.search_members(db, member.member_code)])
+        self.assertIsNone(memberships.find_member_by_code(db, member.member_code))
 
-    def test_staff_cannot_delete_member_with_retained_references(self):
+    def test_staff_deactivation_retains_member_history(self):
         db = self._session()
         memberships = self._memberships()
         member = self._member(db, phone="60123456791")
-        memberships.add_package_record(db, member, "Hours", 3600)
+        package = memberships.add_package_record(db, member, "Hours", 3600)
 
-        with self.assertRaises(HTTPException) as raised:
-            memberships.admin_delete_member(member.id, _=None, db=db)
+        deactivated = memberships.admin_delete_member(member.id, _=None, db=db)
 
-        self.assertEqual(raised.exception.status_code, 409)
-        self.assertIn("package", raised.exception.detail.lower())
-        self.assertIsNotNone(db.query(models.User).filter_by(id=member.id).first())
+        self.assertTrue(deactivated["deactivated"])
+        self.assertFalse(db.query(models.User).filter_by(id=member.id).one().is_active)
+        self.assertEqual(db.query(models.MemberPackage).filter_by(id=package.id).one().member_id, member.id)
 
     def test_staff_can_add_and_edit_manual_member_check_in_history(self):
         db = self._session()
