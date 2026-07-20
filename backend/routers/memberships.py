@@ -84,7 +84,10 @@ def search_members(db: Session, query: str, limit: int = 25) -> list[models.User
     if not term:
         return (
             db.query(models.User)
-            .filter(models.User.member_code.is_not(None))
+            .filter(
+                models.User.member_code.is_not(None),
+                models.User.is_active.is_(True),
+            )
             .order_by(models.User.created_at.desc(), models.User.id.desc())
             .limit(limit)
             .all()
@@ -95,6 +98,7 @@ def search_members(db: Session, query: str, limit: int = 25) -> list[models.User
     return (
         db.query(models.User)
         .filter(
+            models.User.is_active.is_(True),
             or_(
                 models.User.name.ilike(like),
                 models.User.phone.ilike(phone_like),
@@ -147,7 +151,7 @@ def _balance_qr_png_bytes(value: str) -> bytes:
     from PIL import Image  # noqa: PLC0415
 
     qr = qrcode.QRCode(
-        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        error_correction=qrcode.constants.ERROR_CORRECT_Q,
         box_size=10,
         border=4,
     )
@@ -155,7 +159,7 @@ def _balance_qr_png_bytes(value: str) -> bytes:
     qr.make(fit=True)
     image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
     logo = Image.open(_BALANCE_QR_LOGO).convert("RGBA")
-    logo_limit = max(1, image.width // 5)
+    logo_limit = max(1, image.width // 7)
     logo.thumbnail((logo_limit, logo_limit), Image.Resampling.LANCZOS)
     plate_size = max(logo.width, logo.height) + max(12, image.width // 50)
     plate = Image.new("RGB", (plate_size, plate_size), "white")
@@ -618,18 +622,23 @@ def admin_delete_member(
             detail="Administrator accounts cannot be deleted as members",
         )
 
-    conflicts = _membership_removal_conflicts(db, member.id)
-    if conflicts:
+    active_table = (
+        db.query(models.TableTimer)
+        .filter(
+            models.TableTimer.active_member_id == member.id,
+            models.TableTimer.is_running.is_(True),
+        )
+        .first()
+    )
+    if active_table:
         raise HTTPException(
             status_code=409,
-            detail="Member cannot be deleted while retained references exist: "
-            + ", ".join(conflicts),
+            detail="Member cannot be deactivated while checked in to a running table",
         )
-
-    deleted_member_id = member.id
-    db.delete(member)
+    member.is_active = False
+    member.balance_access_token = None
     db.commit()
-    return {"id": deleted_member_id, "deleted": True}
+    return {"id": member.id, "deactivated": True, "is_active": False}
 
 
 @router.put("/{member_id}")

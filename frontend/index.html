@@ -3238,6 +3238,21 @@ function MembershipPage({ user, onLogout }) {
     setMessage('Membership capability removed. The account and administrator access remain active.');
   };
 
+  const deleteMember = async () => {
+    if (!selected?.member_code || selected.is_admin) return;
+    if (!window.confirm(`Deactivate ${selected.name}? They will no longer appear in member search or QR check-in.`)) return;
+    const res = await apiFetch(`/members/${selected.id}`, { method:'DELETE' });
+    if (!res?.ok) {
+      let detail = 'Unable to delete member.';
+      try { detail = (await res.json())?.detail || detail; } catch (_) {}
+      setMessage(detail);
+      return;
+    }
+    setMembers(prev => prev.filter(member => member.id !== selected.id));
+    setSelected(null);
+    setMessage('Member deactivated.');
+  };
+
   const createMember = created => {
     setMembers(prev => [created, ...prev.filter(member => member.id !== created.id)]);
     setSelected(created);
@@ -3582,6 +3597,7 @@ function MembershipPage({ user, onLogout }) {
                       </label>
                       <button onClick={saveMember} style={{background:'#1A1A18',color:'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Save Member</button>
                       <button onClick={removeMembership} style={{background:'#fff',color:'#B42318',border:'1px solid #F0B4AE',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Remove Membership</button>
+                      {!selected.is_admin && <button onClick={deleteMember} style={{background:'#B42318',color:'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Deactivate Member</button>}
                     </div>
                   </div>}
 

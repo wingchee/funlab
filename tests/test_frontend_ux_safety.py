@@ -136,6 +136,18 @@ def test_staff_ui_can_promote_and_safely_remove_membership_capability():
     assert 'placeholder="Name, phone, or Member ID"' in html
 
 
+def test_staff_ui_can_delete_non_admin_member_accounts():
+    html = read_frontend()
+    membership_source = html[
+        html.index("function MembershipPage({ user, onLogout })"):
+        html.index("function MemberPortalPage(")
+    ]
+
+    assert "Deactivate Member" in membership_source
+    assert "const deleteMember = async () =>" in membership_source
+    assert "`/members/${selected.id}`" in membership_source
+
+
 def test_staff_ui_can_add_and_edit_manual_member_check_in_history():
     html = read_frontend()
     membership_source = html[
