@@ -110,6 +110,36 @@ def test_add_member_prompt_offers_restore_or_new_account_for_deactivated_phone()
     assert "archive-and-replace" in add_member_source
 
 
+def test_add_member_cannot_navigate_back_during_restore_or_replacement():
+    html = read_frontend()
+    add_member_source = html[
+        html.index("function AddMemberPage({ onCreated, onCancel })"):
+        html.index("// ─── MEMBERSHIP DASHBOARD")
+    ]
+
+    assert 'aria-disabled={loading}' in add_member_source
+    assert 'disabled={loading}' in add_member_source
+    assert "onClick={()=>{if(!loading)onCancel();}}" in add_member_source
+
+
+def test_add_member_reports_restore_and_creation_success_differently():
+    html = read_frontend()
+    add_member_source = html[
+        html.index("function AddMemberPage({ onCreated, onCancel })"):
+        html.index("// ─── MEMBERSHIP DASHBOARD")
+    ]
+    membership_source = html[
+        html.index("function MembershipPage({ user, onLogout })"):
+        html.index("function MemberPortalPage(")
+    ]
+
+    assert "onCreated(await res.json(), 'created')" in add_member_source
+    assert "onCreated(await res.json(), isRestore ? 'restored' : 'created')" in add_member_source
+    assert "const createMember = (created, resolution = 'created') =>" in membership_source
+    assert "resolution === 'restored'" in membership_source
+    assert "Member restored. Their history and balance are available." in membership_source
+
+
 def test_public_member_balance_route_uses_an_unauthenticated_token_lookup():
     html = read_frontend()
 

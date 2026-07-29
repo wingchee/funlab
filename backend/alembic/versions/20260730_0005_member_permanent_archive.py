@@ -31,7 +31,17 @@ def upgrade() -> None:
             existing_type=sa.Boolean(),
             server_default=None,
         )
+        batch_op.create_check_constraint(
+            "ck_users_permanent_archive_invariants",
+            "NOT is_permanently_archived OR "
+            "(NOT is_active AND phone IS NULL AND balance_access_token IS NULL)",
+        )
 
 
 def downgrade() -> None:
-    op.drop_column("users", "is_permanently_archived")
+    with op.batch_alter_table("users") as batch_op:
+        batch_op.drop_constraint(
+            "ck_users_permanent_archive_invariants",
+            type_="check",
+        )
+        batch_op.drop_column("is_permanently_archived")

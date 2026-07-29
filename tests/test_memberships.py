@@ -5,12 +5,14 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import cv2
 import numpy as np
 from fastapi import HTTPException
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Query, sessionmaker
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -222,17 +224,248 @@ class MembershipTests(unittest.TestCase):
         self.assertIsNone(old_member.balance_access_token)
         self.assertEqual(db.query(models.MemberPackage).filter_by(id=package.id).one().member_id, old_member.id)
 
+    def test_restore_and_archive_competition_allows_only_one_transition(self):
+        memberships = self._memberships()
+        with tempfile.TemporaryDirectory() as directory:
+            engine = create_engine(
+                f"sqlite:///{Path(directory) / 'member-transition.db'}",
+                connect_args={"check_same_thread": False},
+            )
+            models.Base.metadata.create_all(bind=engine)
+            Session = sessionmaker(bind=engine)
+            seed = Session()
+            restore_wins = self._member(
+                seed,
+                name="Restore Wins",
+                phone="60123456001",
+                is_active=False,
+                balance_access_token=None,
+            )
+            archive_wins = self._member(
+                seed,
+                name="Archive Wins",
+                phone="60123456002",
+                is_active=False,
+                balance_access_token=None,
+            )
+            restore_wins_id = restore_wins.id
+            archive_wins_id = archive_wins.id
+            seed.close()
+
+            restore_session = Session()
+            archive_session = Session()
+            restore_session.query(models.User).filter_by(id=restore_wins_id).one()
+            archive_session.query(models.User).filter_by(id=restore_wins_id).one()
+
+            memberships.admin_restore_member(restore_wins_id, _=None, db=restore_session)
+            with self.assertRaises(HTTPException) as archive_lost:
+                memberships.admin_archive_and_replace_member(
+                    restore_wins_id,
+                    schemas.MemberCreate(name="Replacement", phone="60123456001"),
+                    _=None,
+                    db=archive_session,
+                )
+            self.assertEqual(archive_lost.exception.status_code, 404)
+
+            restored = Session().query(models.User).filter_by(id=restore_wins_id).one()
+            self.assertTrue(restored.is_active)
+            self.assertFalse(restored.is_permanently_archived)
+            self.assertTrue(restored.balance_access_token)
+
+            restore_session = Session()
+            archive_session = Session()
+            restore_session.query(models.User).filter_by(id=archive_wins_id).one()
+            archive_session.query(models.User).filter_by(id=archive_wins_id).one()
+
+            replacement = memberships.admin_archive_and_replace_member(
+                archive_wins_id,
+                schemas.MemberCreate(name="Replacement", phone="60123456002"),
+                _=None,
+                db=archive_session,
+            )
+            with self.assertRaises(HTTPException) as restore_lost:
+                memberships.admin_restore_member(archive_wins_id, _=None, db=restore_session)
+            self.assertEqual(restore_lost.exception.status_code, 404)
+
+            archived = Session().query(models.User).filter_by(id=archive_wins_id).one()
+            self.assertTrue(archived.is_permanently_archived)
+            self.assertFalse(archived.is_active)
+            self.assertIsNone(archived.phone)
+            self.assertIsNone(archived.balance_access_token)
+            self.assertNotEqual(replacement["id"], archived.id)
+
+    def test_archive_claim_invalidates_a_restore_that_already_read_the_member(self):
+        memberships = self._memberships()
+        with tempfile.TemporaryDirectory() as directory:
+            engine = create_engine(
+                f"sqlite:///{Path(directory) / 'stale-restore.db'}",
+                connect_args={"check_same_thread": False},
+            )
+            models.Base.metadata.create_all(bind=engine)
+            Session = sessionmaker(bind=engine)
+            seed = Session()
+            member = self._member(
+                seed,
+                name="Stale Restore",
+                phone="60123456004",
+                is_active=False,
+                balance_access_token=None,
+            )
+            member_id = member.id
+            seed.close()
+            restore_session = Session()
+            archive_session = Session()
+            original_first = Query.first
+            archive_result = {}
+            interleaved = False
+
+            def archive_after_restore_read(query):
+                nonlocal interleaved
+                candidate = original_first(query)
+                if (
+                    not interleaved
+                    and isinstance(candidate, models.User)
+                    and candidate.id == member_id
+                ):
+                    interleaved = True
+                    archive_result.update(
+                        memberships.admin_archive_and_replace_member(
+                            member_id,
+                            schemas.MemberCreate(
+                                name="Replacement",
+                                phone="60123456004",
+                            ),
+                            _=None,
+                            db=archive_session,
+                        )
+                    )
+                return candidate
+
+            with patch.object(Query, "first", archive_after_restore_read):
+                with self.assertRaises(HTTPException) as raised:
+                    memberships.admin_restore_member(
+                        member_id,
+                        _=None,
+                        db=restore_session,
+                    )
+
+            self.assertTrue(interleaved)
+            self.assertEqual(raised.exception.status_code, 404)
+            archived = Session().query(models.User).filter_by(id=member_id).one()
+            self.assertTrue(archived.is_permanently_archived)
+            self.assertFalse(archived.is_active)
+            self.assertIsNone(archived.phone)
+            self.assertIsNone(archived.balance_access_token)
+            self.assertNotEqual(archive_result["id"], archived.id)
+
+    def test_archive_claim_invalidates_an_activation_update_that_already_read_the_member(self):
+        memberships = self._memberships()
+        with tempfile.TemporaryDirectory() as directory:
+            engine = create_engine(
+                f"sqlite:///{Path(directory) / 'stale-update.db'}",
+                connect_args={"check_same_thread": False},
+            )
+            models.Base.metadata.create_all(bind=engine)
+            Session = sessionmaker(bind=engine)
+            seed = Session()
+            member = self._member(
+                seed,
+                name="Stale Update",
+                phone="60123456005",
+                is_active=False,
+                balance_access_token=None,
+            )
+            member_id = member.id
+            seed.close()
+            update_session = Session()
+            archive_session = Session()
+            original_first = Query.first
+            interleaved = False
+
+            def archive_after_update_read(query):
+                nonlocal interleaved
+                candidate = original_first(query)
+                if (
+                    not interleaved
+                    and isinstance(candidate, models.User)
+                    and candidate.id == member_id
+                ):
+                    interleaved = True
+                    memberships.admin_archive_and_replace_member(
+                        member_id,
+                        schemas.MemberCreate(
+                            name="Replacement",
+                            phone="60123456005",
+                        ),
+                        _=None,
+                        db=archive_session,
+                    )
+                return candidate
+
+            with patch.object(Query, "first", archive_after_update_read):
+                with self.assertRaises(HTTPException) as raised:
+                    memberships.admin_update_member(
+                        member_id,
+                        schemas.MemberUpdate(is_active=True),
+                        _=None,
+                        db=update_session,
+                    )
+
+            self.assertTrue(interleaved)
+            self.assertEqual(raised.exception.status_code, 404)
+            archived = Session().query(models.User).filter_by(id=member_id).one()
+            self.assertTrue(archived.is_permanently_archived)
+            self.assertFalse(archived.is_active)
+            self.assertIsNone(archived.phone)
+            self.assertIsNone(archived.balance_access_token)
+
+    def test_database_rejects_identity_fields_on_permanently_archived_member(self):
+        db = self._session()
+        archived = models.User(
+            email="archived-invariant@example.com",
+            password_hash=hash_password("member-pass"),
+            name="Archived",
+            is_admin=False,
+            member_code="FL23456003",
+            phone=None,
+            is_active=False,
+            is_permanently_archived=True,
+            balance_access_token=None,
+            notes="",
+        )
+        db.add(archived)
+        db.commit()
+
+        for field, value in (
+            ("is_active", True),
+            ("phone", "60123456003"),
+            ("balance_access_token", "must-not-survive"),
+        ):
+            with self.subTest(field=field):
+                setattr(archived, field, value)
+                with self.assertRaises(IntegrityError):
+                    db.commit()
+                db.rollback()
+                db.refresh(archived)
+
     def test_admin_cannot_reactivate_permanently_archived_member_through_update(self):
         db = self._session()
         memberships = self._memberships()
         admin = self._member(db, name="Owner", phone="60123456778", is_admin=True)
-        archived_member = self._member(
-            db,
+        archived_member = models.User(
+            email="archived-member@example.com",
+            password_hash=hash_password("member-pass"),
             name="Archived Ari",
-            phone="60123456779",
+            is_admin=False,
+            member_code="FL23456779",
+            phone=None,
             is_active=False,
             is_permanently_archived=True,
+            balance_access_token=None,
+            notes="",
         )
+        db.add(archived_member)
+        db.commit()
 
         with self.assertRaises(HTTPException) as raised:
             memberships.admin_update_member(
@@ -245,6 +478,63 @@ class MembershipTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 404)
         db.refresh(archived_member)
         self.assertFalse(archived_member.is_active)
+
+    def test_archived_member_cannot_regenerate_balance_link(self):
+        db = self._session()
+        memberships = self._memberships()
+        archived_member = models.User(
+            email="archived-balance@example.com",
+            password_hash=hash_password("member-pass"),
+            name="Archived Ari",
+            is_admin=False,
+            member_code="FL23456769",
+            phone=None,
+            is_active=False,
+            is_permanently_archived=True,
+            balance_access_token=None,
+            notes="",
+        )
+        db.add(archived_member)
+        db.commit()
+
+        with self.assertRaises(HTTPException) as raised:
+            memberships.regenerate_member_balance_link(archived_member.id, _=None, db=db)
+
+        self.assertEqual(raised.exception.status_code, 404)
+        db.refresh(archived_member)
+        self.assertIsNone(archived_member.balance_access_token)
+
+    def test_archived_account_cannot_be_promoted_to_membership(self):
+        db = self._session()
+        memberships = self._memberships()
+        archived_account = models.User(
+            email="archived-account@example.com",
+            password_hash=hash_password("member-pass"),
+            name="Archived Account",
+            is_admin=False,
+            member_code=None,
+            phone=None,
+            is_active=False,
+            is_permanently_archived=True,
+            balance_access_token=None,
+            notes="",
+        )
+        db.add(archived_account)
+        db.commit()
+
+        with self.assertRaises(HTTPException) as raised:
+            memberships.admin_promote_membership(
+                archived_account.id,
+                schemas.MembershipPromotion(phone="+60 12-345 6769"),
+                _=None,
+                db=db,
+            )
+
+        self.assertEqual(raised.exception.status_code, 404)
+        db.refresh(archived_account)
+        self.assertIsNone(archived_account.phone)
+        self.assertIsNone(archived_account.member_code)
+        self.assertIsNone(archived_account.balance_access_token)
 
     def test_public_balance_exposes_only_safe_member_balance_fields(self):
         db = self._session()

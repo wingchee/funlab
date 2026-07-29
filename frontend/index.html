@@ -3043,7 +3043,7 @@ function AddMemberPage({ onCreated, onCancel }) {
         }
         return;
       }
-      onCreated(await res.json());
+      onCreated(await res.json(), 'created');
     } catch (_) {
       setError('Unable to create member.');
     } finally {
@@ -3073,7 +3073,7 @@ function AddMemberPage({ onCreated, onCancel }) {
         }
         return;
       }
-      onCreated(await res.json());
+      onCreated(await res.json(), isRestore ? 'restored' : 'created');
     } catch (_) {
       setError('Unable to update the member account.');
     } finally {
@@ -3089,7 +3089,7 @@ function AddMemberPage({ onCreated, onCancel }) {
             <h1 style={{fontSize:36,fontWeight:800,letterSpacing:'0',marginBottom:8}}>Add Member</h1>
             <p style={{color:'#888',fontSize:15}}>Create a member record with the details needed for check-ins and balance access.</p>
           </div>
-          <button type="button" onClick={onCancel} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:'pointer'}}>Back to dashboard</button>
+          <button type="button" disabled={loading} aria-disabled={loading} onClick={()=>{if(!loading)onCancel();}} style={{background:loading?'#F4F2EF':'#fff',color:loading?'#999':'inherit',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 14px',fontWeight:800,fontFamily:'inherit',cursor:loading?'default':'pointer'}}>Back to dashboard</button>
         </div>
         <form onSubmit={submit} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22,display:'grid',gap:14}}>
           <div>
@@ -3303,11 +3303,15 @@ function MembershipPage({ user, onLogout }) {
     setMessage('Member deactivated.');
   };
 
-  const createMember = created => {
+  const createMember = (created, resolution = 'created') => {
     setMembers(prev => [created, ...prev.filter(member => member.id !== created.id)]);
     setSelected(created);
     setStaffView('dashboard');
-    setMessage('Member created. Their balance link is ready to share.');
+    setMessage(
+      resolution === 'restored'
+        ? 'Member restored. Their history and balance are available.'
+        : 'Member created. Their balance link is ready to share.'
+    );
   };
 
   const copyBalanceLink = async () => {

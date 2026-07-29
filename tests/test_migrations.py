@@ -140,6 +140,11 @@ class MigrationTests(unittest.TestCase):
                     ).fetchone()[0],
                     0,
                 )
+                with self.assertRaises(sqlite3.IntegrityError):
+                    connection.execute(
+                        "UPDATE users SET is_permanently_archived=1, is_active=1, "
+                        "phone='60123456003', balance_access_token='invalid' WHERE id=1"
+                    )
 
     def test_upgrade_preserves_production_users_and_user_favorites(self):
         with tempfile.TemporaryDirectory() as directory:

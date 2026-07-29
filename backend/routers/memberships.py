@@ -148,7 +148,11 @@ def _create_member_record(db: Session, name: str, phone: str) -> models.User:
 def _member_with_balance_link(db: Session, member_id: int) -> models.User:
     member = (
         db.query(models.User)
-        .filter(models.User.id == member_id, models.User.member_code.is_not(None))
+        .filter(
+            models.User.id == member_id,
+            models.User.member_code.is_not(None),
+            models.User.is_permanently_archived.is_(False),
+        )
         .first()
     )
     if not member:
@@ -234,7 +238,7 @@ def admin_restore_member(
     _: models.User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    member = (
+    candidate = (
         db.query(models.User)
         .filter(
             models.User.id == member_id,
@@ -244,17 +248,37 @@ def admin_restore_member(
         )
         .first()
     )
-    if not member:
+    if not candidate:
         raise HTTPException(status_code=404, detail="Deactivated member not found")
 
-    member.is_active = True
-    if not member.balance_access_token:
-        member.balance_access_token = _generate_balance_access_token(db)
+    balance_access_token = (
+        candidate.balance_access_token or _generate_balance_access_token(db)
+    )
     try:
+        claimed = (
+            db.query(models.User)
+            .filter(
+                models.User.id == member_id,
+                models.User.member_code.is_not(None),
+                models.User.is_active.is_(False),
+                models.User.is_permanently_archived.is_(False),
+            )
+            .update(
+                {
+                    models.User.is_active: True,
+                    models.User.balance_access_token: balance_access_token,
+                },
+                synchronize_session=False,
+            )
+        )
+        if claimed != 1:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Deactivated member not found")
         db.commit()
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Unable to restore member") from exc
+    member = db.query(models.User).filter(models.User.id == member_id).one()
     db.refresh(member)
     payload = serialize_member(member)
     payload["balance_access_token"] = member.balance_access_token
@@ -275,7 +299,7 @@ def admin_archive_and_replace_member(
     if not phone:
         raise HTTPException(status_code=400, detail="A valid phone is required")
 
-    member = (
+    candidate = (
         db.query(models.User)
         .filter(
             models.User.id == member_id,
@@ -286,14 +310,32 @@ def admin_archive_and_replace_member(
         )
         .first()
     )
-    if not member:
+    if not candidate:
         raise HTTPException(status_code=404, detail="Deactivated member not found")
 
-    member.is_permanently_archived = True
-    member.balance_access_token = None
-    member.phone = None
     try:
-        db.flush()
+        claimed = (
+            db.query(models.User)
+            .filter(
+                models.User.id == member_id,
+                models.User.member_code.is_not(None),
+                models.User.is_active.is_(False),
+                models.User.is_permanently_archived.is_(False),
+                models.User.phone == phone,
+            )
+            .update(
+                {
+                    models.User.is_permanently_archived: True,
+                    models.User.is_active: False,
+                    models.User.balance_access_token: None,
+                    models.User.phone: None,
+                },
+                synchronize_session=False,
+            )
+        )
+        if claimed != 1:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Deactivated member not found")
         replacement = _create_member_record(db, name, phone)
         db.commit()
     except IntegrityError as exc:
@@ -341,13 +383,29 @@ def regenerate_member_balance_link(
     _: models.User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    member = _member_with_balance_link(db, member_id)
-    member.balance_access_token = _generate_balance_access_token(db)
+    _member_with_balance_link(db, member_id)
+    balance_access_token = _generate_balance_access_token(db)
     try:
+        updated = (
+            db.query(models.User)
+            .filter(
+                models.User.id == member_id,
+                models.User.member_code.is_not(None),
+                models.User.is_permanently_archived.is_(False),
+            )
+            .update(
+                {models.User.balance_access_token: balance_access_token},
+                synchronize_session=False,
+            )
+        )
+        if updated != 1:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Member not found")
         db.commit()
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Unable to regenerate private balance link") from exc
+    member = db.query(models.User).filter(models.User.id == member_id).one()
     db.refresh(member)
     return _balance_link_response(member)
 
@@ -628,7 +686,10 @@ def admin_promote_membership(
     _: models.User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    account = db.query(models.User).filter(models.User.id == member_id).first()
+    account = db.query(models.User).filter(
+        models.User.id == member_id,
+        models.User.is_permanently_archived.is_(False),
+    ).first()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     if account.member_code:
@@ -750,21 +811,33 @@ def admin_update_member(
     ).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
+    values = {models.User.notes: body.notes.strip()}
     if body.name.strip():
-        member.name = body.name.strip()
+        values[models.User.name] = body.name.strip()
     if body.email.strip():
-        member.email = normalize_email(body.email)
+        values[models.User.email] = normalize_email(body.email)
     if body.phone.strip():
         normalized_phone = normalize_phone(body.phone)
         if not normalized_phone:
             raise HTTPException(status_code=400, detail="Member phone is required")
-        member.phone = normalized_phone
+        values[models.User.phone] = normalized_phone
     if body.password:
-        member.password_hash = hash_password(body.password)
+        values[models.User.password_hash] = hash_password(body.password)
     if body.is_active is not None:
-        member.is_active = bool(body.is_active)
-    member.notes = body.notes.strip()
+        values[models.User.is_active] = bool(body.is_active)
     try:
+        updated = (
+            db.query(models.User)
+            .filter(
+                models.User.id == member_id,
+                models.User.member_code.is_not(None),
+                models.User.is_permanently_archived.is_(False),
+            )
+            .update(values, synchronize_session=False)
+        )
+        if updated != 1:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Member not found")
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -772,6 +845,7 @@ def admin_update_member(
             status_code=409,
             detail="A member already exists for this email or phone",
         ) from exc
+    member = db.query(models.User).filter(models.User.id == member_id).one()
     db.refresh(member)
     return serialize_member(member)
 

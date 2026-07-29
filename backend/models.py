@@ -1,10 +1,28 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Index, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import relationship
 from database import Base
 
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "NOT is_permanently_archived OR "
+            "(NOT is_active AND phone IS NULL AND balance_access_token IS NULL)",
+            name="ck_users_permanent_archive_invariants",
+        ),
+    )
     id = Column(Integer, primary_key=True)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
