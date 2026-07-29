@@ -57,6 +57,7 @@ class MigrationTests(unittest.TestCase):
                     "balance_access_token",
                     "phone",
                     "is_active",
+                    "is_permanently_archived",
                     "notes",
                     "updated_at",
                 ):
@@ -78,7 +79,7 @@ class MigrationTests(unittest.TestCase):
                 self.assertNotIn("member_id", _columns(connection, "favorites"))
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                    "20260712_0004",
+                    "20260730_0005",
                 )
 
     def test_upgrade_backfills_unique_balance_tokens_for_members_only(self):
@@ -114,6 +115,31 @@ class MigrationTests(unittest.TestCase):
                     connection.execute(
                         "UPDATE users SET balance_access_token=? WHERE id=2", (member_token,)
                     )
+
+    def test_permanent_member_archive_migration_backfills_existing_users_on_sqlite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "permanent-member-archive.db"
+            prepared = self._upgrade(database_path, "20260712_0004")
+            self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+            with sqlite3.connect(database_path) as connection:
+                connection.execute(
+                    "INSERT INTO users (id, email, password_hash, name, is_admin) "
+                    "VALUES (1, 'existing@example.com', 'hash', 'Existing', 0)"
+                )
+
+            result = self._upgrade(database_path, "20260730_0005")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            with sqlite3.connect(database_path) as connection:
+                user_columns = _columns(connection, "users")
+                self.assertEqual(user_columns["is_permanently_archived"][3], 1)
+                self.assertIsNone(user_columns["is_permanently_archived"][4])
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT is_permanently_archived FROM users WHERE id=1"
+                    ).fetchone()[0],
+                    0,
+                )
 
     def test_upgrade_preserves_production_users_and_user_favorites(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -394,8 +420,9 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
             with sqlite3.connect(database_path) as connection:
                 connection.execute(
-                    "INSERT INTO users (id, email, password_hash, name, is_admin) "
-                    "VALUES (7, 'keep@example.com', 'preserved-hash', 'Keep', 1)"
+                    "INSERT INTO users "
+                    "(id, email, password_hash, name, is_admin, is_permanently_archived) "
+                    "VALUES (7, 'keep@example.com', 'preserved-hash', 'Keep', 1, 0)"
                 )
 
             migration_root = directory_path / "alembic"
@@ -459,7 +486,7 @@ class MigrationTests(unittest.TestCase):
             with sqlite3.connect(database_path) as connection:
                 self.assertEqual(
                     connection.execute("SELECT version_num FROM alembic_version").fetchone()[0],
-                    "20260712_0004",
+                    "20260730_0005",
                 )
                 self.assertFalse(
                     connection.execute(

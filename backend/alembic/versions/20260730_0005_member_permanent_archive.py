@@ -25,7 +25,12 @@ def upgrade() -> None:
             server_default=sa.false(),
         ),
     )
-    op.alter_column("users", "is_permanently_archived", server_default=None)
+    with op.batch_alter_table("users") as batch_op:
+        batch_op.alter_column(
+            "is_permanently_archived",
+            existing_type=sa.Boolean(),
+            server_default=None,
+        )
 
 
 def downgrade() -> None:
