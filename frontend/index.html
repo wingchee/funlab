@@ -3010,6 +3010,7 @@ function AddMemberPage({ onCreated, onCancel }) {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [restoreCandidate, setRestoreCandidate] = useState(null);
   const inputStyle = {
     width:'100%',border:'1px solid #E8E6E1',borderRadius:8,padding:'10px 12px',
     fontSize:13,fontFamily:'inherit',outline:'none',background:'#fff'
@@ -3017,6 +3018,7 @@ function AddMemberPage({ onCreated, onCancel }) {
 
   const submit = async event => {
     event.preventDefault();
+    if (restoreCandidate) return;
     if (!name.trim() || !phone.trim()) {
       setError('Name and phone are required.');
       return;
@@ -3029,12 +3031,51 @@ function AddMemberPage({ onCreated, onCancel }) {
         body:JSON.stringify({ name: name.trim(), phone: phone.trim() }),
       });
       if (!res?.ok) {
-        try { setError((await res?.json())?.detail || 'Unable to create member.'); } catch (_) { setError('Unable to create member.'); }
+        try {
+          const detail = (await res?.json())?.detail;
+          if (detail?.code === 'deactivated_member_exists' && detail.member?.id) {
+            setRestoreCandidate(detail.member);
+          } else {
+            setError(typeof detail === 'string' ? detail : 'Unable to create member.');
+          }
+        } catch (_) {
+          setError('Unable to create member.');
+        }
         return;
       }
       onCreated(await res.json());
     } catch (_) {
       setError('Unable to create member.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resolveDeactivatedMember = async action => {
+    if (!restoreCandidate) return;
+    setLoading(true);
+    setError('');
+    try {
+      const isRestore = action === 'restore';
+      const res = await apiFetch(
+        `/members/${restoreCandidate.id}/${isRestore ? 'restore' : 'archive-and-replace'}`,
+        {
+          method:'POST',
+          ...(isRestore ? {} : { body:JSON.stringify({ name:name.trim(), phone:phone.trim() }) }),
+        },
+      );
+      if (!res?.ok) {
+        try {
+          const detail = (await res?.json())?.detail;
+          setError(typeof detail === 'string' ? detail : 'Unable to update the member account.');
+        } catch (_) {
+          setError('Unable to update the member account.');
+        }
+        return;
+      }
+      onCreated(await res.json());
+    } catch (_) {
+      setError('Unable to update the member account.');
     } finally {
       setLoading(false);
     }
@@ -3053,14 +3094,23 @@ function AddMemberPage({ onCreated, onCancel }) {
         <form onSubmit={submit} style={{background:'#fff',border:'1px solid #E8E6E1',borderRadius:8,padding:22,display:'grid',gap:14}}>
           <div>
             <label htmlFor="new-member-name" style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Name</label>
-            <input id="new-member-name" value={name} onChange={event=>setName(event.target.value)} autoComplete="name" style={inputStyle}/>
+            <input id="new-member-name" value={name} onChange={event=>setName(event.target.value)} autoComplete="name" disabled={loading || !!restoreCandidate} style={inputStyle}/>
           </div>
           <div>
             <label htmlFor="new-member-phone" style={{display:'block',fontSize:12,fontWeight:800,color:'#555',marginBottom:6}}>Phone</label>
-            <input id="new-member-phone" value={phone} onChange={event=>setPhone(event.target.value)} placeholder="+61 412 345 678" type="tel" autoComplete="tel" style={inputStyle}/>
+            <input id="new-member-phone" value={phone} onChange={event=>setPhone(event.target.value)} placeholder="+61 412 345 678" type="tel" autoComplete="tel" disabled={loading || !!restoreCandidate} style={inputStyle}/>
           </div>
+          {restoreCandidate && <div role="status" style={{background:'#FFF7ED',border:'1px solid #FDBA74',borderRadius:8,padding:'14px',display:'grid',gap:10}}>
+            <div style={{fontSize:14,fontWeight:800,color:'#9A3412'}}>A deactivated account already uses this phone number.</div>
+            <div style={{fontSize:13,color:'#7C2D12',lineHeight:1.5}}>Restore Old Account keeps its member history and remaining balance. Create New Account permanently archives the old account and creates a fresh account with this name and phone.</div>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <button type="button" disabled={loading} onClick={()=>resolveDeactivatedMember('restore')} style={{background:loading?'#E8E6E1':T.accentRed,color:loading?'#888':'#fff',border:'none',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:loading?'default':'pointer'}}>Restore Old Account</button>
+              <button type="button" disabled={loading} onClick={()=>resolveDeactivatedMember('replace')} style={{background:'#fff',color:'#9A3412',border:'1px solid #FDBA74',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:loading?'default':'pointer'}}>Create New Account</button>
+              <button type="button" disabled={loading} onClick={()=>{setRestoreCandidate(null);setError('');}} style={{background:'transparent',color:'#666',border:'1px solid #ddd',borderRadius:8,padding:'10px 12px',fontWeight:800,fontFamily:'inherit',cursor:loading?'default':'pointer'}}>Cancel</button>
+            </div>
+          </div>}
           {error && <div role="status" style={{background:'#FEE2E2',border:'1px solid #FCA5A5',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#991B1B'}}>{error}</div>}
-          <button type="submit" disabled={loading} style={{background:loading?'#E8E6E1':T.accentRed,color:loading?'#888':'#fff',border:'none',borderRadius:8,padding:'11px 14px',fontWeight:800,fontFamily:'inherit',cursor:loading?'default':'pointer'}}>{loading ? 'Creating…' : 'Create Member'}</button>
+          {!restoreCandidate && <button type="submit" disabled={loading} style={{background:loading?'#E8E6E1':T.accentRed,color:loading?'#888':'#fff',border:'none',borderRadius:8,padding:'11px 14px',fontWeight:800,fontFamily:'inherit',cursor:loading?'default':'pointer'}}>{loading ? 'Creating…' : 'Create Member'}</button>}
         </form>
       </div>
     </div>

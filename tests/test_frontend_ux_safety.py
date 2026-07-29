@@ -97,6 +97,19 @@ def test_staff_can_create_members_and_manage_public_balance_links():
     assert "balance-qr?origin=" in html
 
 
+def test_add_member_prompt_offers_restore_or_new_account_for_deactivated_phone():
+    html = read_frontend()
+    add_member_source = html[
+        html.index("function AddMemberPage({ onCreated, onCancel })"):
+        html.index("// ─── MEMBERSHIP DASHBOARD")
+    ]
+
+    assert "deactivated_member_exists" in add_member_source
+    assert "Restore Old Account" in add_member_source
+    assert "Create New Account" in add_member_source
+    assert "archive-and-replace" in add_member_source
+
+
 def test_public_member_balance_route_uses_an_unauthenticated_token_lookup():
     html = read_frontend()
 
