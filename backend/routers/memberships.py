@@ -746,6 +746,7 @@ def admin_update_member(
     member = db.query(models.User).filter(
         models.User.id == member_id,
         models.User.member_code.is_not(None),
+        models.User.is_permanently_archived.is_(False),
     ).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")

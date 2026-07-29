@@ -222,6 +222,30 @@ class MembershipTests(unittest.TestCase):
         self.assertIsNone(old_member.balance_access_token)
         self.assertEqual(db.query(models.MemberPackage).filter_by(id=package.id).one().member_id, old_member.id)
 
+    def test_admin_cannot_reactivate_permanently_archived_member_through_update(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = self._member(db, name="Owner", phone="60123456778", is_admin=True)
+        archived_member = self._member(
+            db,
+            name="Archived Ari",
+            phone="60123456779",
+            is_active=False,
+            is_permanently_archived=True,
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            memberships.admin_update_member(
+                archived_member.id,
+                schemas.MemberUpdate(is_active=True),
+                _=admin,
+                db=db,
+            )
+
+        self.assertEqual(raised.exception.status_code, 404)
+        db.refresh(archived_member)
+        self.assertFalse(archived_member.is_active)
+
     def test_public_balance_exposes_only_safe_member_balance_fields(self):
         db = self._session()
         memberships = self._memberships()
