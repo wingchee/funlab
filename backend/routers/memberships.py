@@ -127,6 +127,24 @@ def _generate_balance_access_token(db: Session) -> str:
     raise HTTPException(status_code=500, detail="Unable to generate private balance link")
 
 
+def _create_member_record(db: Session, name: str, phone: str) -> models.User:
+    balance_access_token = _generate_balance_access_token(db)
+    member = models.User(
+        email=f"member-{balance_access_token[:24]}@members.funlab.invalid",
+        password_hash=hash_password(secrets.token_urlsafe(32)),
+        name=name,
+        is_admin=False,
+        member_code=_generate_member_code(db),
+        balance_access_token=balance_access_token,
+        phone=phone,
+        is_active=True,
+        is_permanently_archived=False,
+        notes="",
+    )
+    db.add(member)
+    return member
+
+
 def _member_with_balance_link(db: Session, member_id: int) -> models.User:
     member = (
         db.query(models.User)
@@ -186,22 +204,19 @@ def admin_create_member(
         raise HTTPException(status_code=400, detail="Member name is required")
     if not phone:
         raise HTTPException(status_code=400, detail="A valid phone is required")
-    if db.query(models.User.id).filter(models.User.phone == phone).first():
+    existing_member = db.query(models.User).filter(models.User.phone == phone).first()
+    if existing_member:
+        if not existing_member.is_active and not existing_member.is_permanently_archived:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "deactivated_member_exists",
+                    "member": _member_summary(existing_member),
+                },
+            )
         raise HTTPException(status_code=409, detail="Phone is already used by another account")
 
-    balance_access_token = _generate_balance_access_token(db)
-    member = models.User(
-        email=f"member-{balance_access_token[:24]}@members.funlab.invalid",
-        password_hash=hash_password(secrets.token_urlsafe(32)),
-        name=name,
-        is_admin=False,
-        member_code=_generate_member_code(db),
-        balance_access_token=balance_access_token,
-        phone=phone,
-        is_active=True,
-        notes="",
-    )
-    db.add(member)
+    member = _create_member_record(db, name, phone)
     try:
         db.commit()
     except IntegrityError as exc:
@@ -210,6 +225,86 @@ def admin_create_member(
     db.refresh(member)
     payload = serialize_member(member)
     payload["balance_access_token"] = member.balance_access_token
+    return payload
+
+
+@router.post("/{member_id}/restore")
+def admin_restore_member(
+    member_id: int,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    member = (
+        db.query(models.User)
+        .filter(
+            models.User.id == member_id,
+            models.User.member_code.is_not(None),
+            models.User.is_active.is_(False),
+            models.User.is_permanently_archived.is_(False),
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=404, detail="Deactivated member not found")
+
+    member.is_active = True
+    if not member.balance_access_token:
+        member.balance_access_token = _generate_balance_access_token(db)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Unable to restore member") from exc
+    db.refresh(member)
+    payload = serialize_member(member)
+    payload["balance_access_token"] = member.balance_access_token
+    return payload
+
+
+@router.post("/{member_id}/archive-and-replace")
+def admin_archive_and_replace_member(
+    member_id: int,
+    body: schemas.MemberCreate,
+    _: models.User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    name = body.name.strip()
+    phone = normalize_phone(body.phone)
+    if not name:
+        raise HTTPException(status_code=400, detail="Member name is required")
+    if not phone:
+        raise HTTPException(status_code=400, detail="A valid phone is required")
+
+    member = (
+        db.query(models.User)
+        .filter(
+            models.User.id == member_id,
+            models.User.member_code.is_not(None),
+            models.User.is_active.is_(False),
+            models.User.is_permanently_archived.is_(False),
+            models.User.phone == phone,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=404, detail="Deactivated member not found")
+
+    member.is_permanently_archived = True
+    member.balance_access_token = None
+    member.phone = None
+    try:
+        db.flush()
+        replacement = _create_member_record(db, name, phone)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Member phone or private balance link is already in use",
+        ) from exc
+    db.refresh(replacement)
+    payload = serialize_member(replacement)
+    payload["balance_access_token"] = replacement.balance_access_token
     return payload
 
 

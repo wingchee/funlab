@@ -146,6 +146,82 @@ class MembershipTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 409)
 
+    def test_create_reports_restore_candidate_for_deactivated_phone(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = self._member(db, name="Owner", phone="60123456774", is_admin=True)
+        member = self._member(
+            db,
+            name="Former Ari",
+            phone="61412345678",
+            is_active=False,
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            memberships.admin_create_member(
+                schemas.MemberCreate(name="Ari", phone="+61 412 345 678"),
+                _=admin,
+                db=db,
+            )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.detail["code"], "deactivated_member_exists")
+        self.assertEqual(raised.exception.detail["member"]["id"], member.id)
+
+    def test_admin_can_restore_deactivated_member_with_history(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = self._member(db, name="Owner", phone="60123456775", is_admin=True)
+        member = self._member(
+            db,
+            name="Ari",
+            phone="60123456776",
+            is_active=False,
+            balance_access_token=None,
+        )
+        package = memberships.add_package_record(db, member, "Three hours", 3 * 60 * 60)
+
+        restored = memberships.admin_restore_member(member.id, _=admin, db=db)
+
+        self.assertEqual(restored["id"], member.id)
+        self.assertTrue(restored["is_active"])
+        self.assertTrue(restored["balance_access_token"])
+        db.refresh(member)
+        self.assertTrue(member.is_active)
+        self.assertTrue(member.balance_access_token)
+        self.assertEqual(db.query(models.MemberPackage).filter_by(id=package.id).one().member_id, member.id)
+
+    def test_admin_can_archive_old_member_and_create_new_member_with_same_phone(self):
+        db = self._session()
+        memberships = self._memberships()
+        admin = self._member(db, name="Owner", phone="60123456777", is_admin=True)
+        old_member = self._member(
+            db,
+            name="Old Ari",
+            phone="61412345678",
+            is_active=False,
+            balance_access_token="old-private-balance-token",
+        )
+        package = memberships.add_package_record(db, old_member, "Three hours", 3 * 60 * 60)
+
+        replacement = memberships.admin_archive_and_replace_member(
+            old_member.id,
+            schemas.MemberCreate(name="New Ari", phone="+61 412 345 678"),
+            _=admin,
+            db=db,
+        )
+
+        self.assertNotEqual(replacement["id"], old_member.id)
+        self.assertEqual(replacement["phone"], "61412345678")
+        self.assertTrue(replacement["is_active"])
+        self.assertTrue(replacement["balance_access_token"])
+        db.refresh(old_member)
+        self.assertTrue(old_member.is_permanently_archived)
+        self.assertFalse(old_member.is_active)
+        self.assertIsNone(old_member.phone)
+        self.assertIsNone(old_member.balance_access_token)
+        self.assertEqual(db.query(models.MemberPackage).filter_by(id=package.id).one().member_id, old_member.id)
+
     def test_public_balance_exposes_only_safe_member_balance_fields(self):
         db = self._session()
         memberships = self._memberships()
