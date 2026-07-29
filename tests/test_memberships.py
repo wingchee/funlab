@@ -62,6 +62,12 @@ class MembershipTests(unittest.TestCase):
         db.refresh(member)
         return member
 
+    def test_member_accounts_default_to_not_permanently_archived(self):
+        db = self._session()
+        member = self._member(db, phone="60123456793")
+
+        self.assertFalse(member.is_permanently_archived)
+
     def test_membership_routes_do_not_expose_auth_aliases(self):
         source = (BACKEND / "routers" / "memberships.py").read_text()
         self.assertNotIn('@router.post("/register")', source)

@@ -14,6 +14,7 @@ class User(Base):
     balance_access_token = Column(String, unique=True, nullable=True, index=True)
     phone = Column(String, unique=True, nullable=True, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_permanently_archived = Column(Boolean, default=False, nullable=False)
     notes = Column(Text, nullable=False, default="")
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
