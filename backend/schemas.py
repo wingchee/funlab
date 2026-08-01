@@ -15,6 +15,12 @@ class AccountLogin(BaseModel):
     password: str
 
 
+class ProfileUpdate(BaseModel):
+    current_password: str
+    email: str = ""
+    new_password: str = ""
+
+
 class PublishRequest(BaseModel):
     title: str
     tags: List[str]
